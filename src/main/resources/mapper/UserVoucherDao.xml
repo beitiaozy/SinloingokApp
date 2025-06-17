@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.sinloingok.app.dao.UserVoucherDao">
+    <resultMap id="UserVoucherMap" type="com.sinloingok.app.models.voucher.UserVoucher">
+        <id column="id" property="id" />
+        <result column="user_id" property="userId" />
+        <result column="address_id" property="addressId" />
+        <result column="pay_code" property="payCode" />
+        <result column="status" property="status" />
+        <result column="total_money" property="totalMoney" />
+        <result column="voucher_time" property="voucherTime" />
+        <result column="create_time" property="createTime" />
+        <result column="pay_time" property="payTime" />
+        <result column="finish_time" property="finishTime" />
+        <result column="use_time" property="useTime" />
+        <result column="type" property="type" />
+    </resultMap>
+
+    <select id="selectExpired" resultMap="UserVoucherMap">
+        SELECT * FROM user_voucher
+        WHERE status = #{status}
+          AND finish_time &lt;= #{curTime}
+    </select>
+
+    <select id="selectByUser" resultType="map">
+        SELECT id AS voucher_id, status, total_money, finish_time, voucher_time, type
+        FROM user_voucher
+        WHERE user_id = #{userId}
+        <choose>
+            <when test="status != null and status != ''">
+                AND status = #{status}
+            </when>
+            <otherwise>
+                AND status != '未付款'
+            </otherwise>
+        </choose>
+        <if test="type != null and type != ''">
+            AND type = #{type}
+        </if>
+        <if test="addressId != null">
+            AND address_id = #{addressId}
+        </if>
+        ORDER BY create_time DESC
+    </select>
+
+    <select id="selectById" resultMap="UserVoucherMap">
+        SELECT * FROM user_voucher WHERE id = #{id} LIMIT 1
+    </select>
+
+    <insert id="insert" parameterType="com.sinloingok.app.models.voucher.UserVoucher" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO user_voucher (
+            user_id, address_id, pay_code, status, total_money, voucher_time, create_time, pay_time, finish_time, use_time, type
+        ) VALUES (
+            #{userId}, #{addressId}, #{payCode}, #{status}, #{totalMoney}, #{voucherTime}, #{createTime}, #{payTime}, #{finishTime}, #{useTime}, #{type}
+        )
+    </insert>
+
+    <update id="update" parameterType="com.sinloingok.app.models.voucher.UserVoucher">
+        UPDATE user_voucher
+        <set>
+            <if test="userId != null">user_id = #{userId},</if>
+            <if test="addressId != null">address_id = #{addressId},</if>
+            <if test="payCode != null">pay_code = #{payCode},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="totalMoney != null">total_money = #{totalMoney},</if>
+            <if test="voucherTime != null">voucher_time = #{voucherTime},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="payTime != null">pay_time = #{payTime},</if>
+            <if test="finishTime != null">finish_time = #{finishTime},</if>
+            <if test="useTime != null">use_time = #{useTime},</if>
+            <if test="type != null">type = #{type},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+</mapper>

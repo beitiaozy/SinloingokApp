@@ -1,0 +1,230 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.sinloingok.app.dao.NetSiteOrderDao">
+
+    <!-- 子项映射 -->
+    <resultMap id="NetSiteOrderItemizedMap" type="com.sinloingok.app.models.net4g.NetSiteOrderItemized">
+        <id column="item_id" property="id"/>
+        <result column="rule_code" property="ruleCode"/>
+        <result column="rule_name" property="ruleName"/>
+        <result column="unit_price" property="unitPrice"/>
+        <result column="min_bill_duration" property="minBillDuration"/>
+        <result column="max_bill_duration" property="maxBillDuration"/>
+        <result column="max_price" property="maxPrice"/>
+        <result column="pay_code" property="payCode"/>
+        <result column="only_code" property="onlyCode"/>
+        <result column="only_code_port" property="onlyCodePort"/>
+        <result column="total_duration" property="totalDuration"/>
+        <result column="per_use_duration" property="perUseDuration"/>
+        <result column="per_use_start_time" property="perUseStartTime"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <!-- 主订单映射 -->
+    <resultMap id="NetSiteOrderMap" type="com.sinloingok.app.models.net4g.NetSiteOrder">
+        <id column="id" property="id"/>
+        <result column="pay_code" property="payCode"/>
+        <result column="user_id" property="userId"/>
+        <result column="only_code" property="onlyCode"/>
+        <result column="status" property="status"/>
+        <result column="total_amount" property="totalAmount"/>
+        <result column="discount_amount" property="discountAmount"/>
+        <result column="net_amount" property="netAmount"/>
+        <result column="begin_time" property="beginTime"/>
+        <result column="end_time" property="endTime"/>
+        <result column="voucher_id" property="voucherId"/>
+        <result column="calc" property="calc"/>
+        <!-- 一对多关联 -->
+        <collection property="items" ofType="com.sinloingok.app.models.net4g.NetSiteOrderItemized" resultMap="NetSiteOrderItemizedMap"/>
+    </resultMap>
+
+    <!-- 基础查询方法 -->
+    <select id="selectByPayCode" resultMap="NetSiteOrderMap">
+        SELECT
+        o.id, o.pay_code, o.user_id, o.only_code, o.status,
+        o.total_amount, o.discount_amount, o.net_amount,
+        o.begin_time, o.end_time, o.voucher_id, o.calc,
+
+        i.id AS item_id, i.rule_code, i.rule_name, i.unit_price,
+        i.min_bill_duration, i.max_bill_duration, i.max_price,
+        i.pay_code, i.only_code, i.only_code_port,
+        i.total_duration, i.per_use_duration,
+        i.per_use_start_time, i.create_time, i.update_time
+
+        FROM net_site_order o
+        LEFT JOIN net_site_order_itemized i ON o.pay_code = i.pay_code
+        WHERE o.pay_code = #{payCode}
+    </select>
+    <select id="hasNetSiteOrderStatusExists" resultType="boolean">
+        SELECT EXISTS(SELECT 1 FROM net_site_order WHERE pay_code = #{payCode} AND status = #{status})
+    </select>
+
+    <!-- 分页查询方法 -->
+    <select id="queryNetSiteOrderByPage" resultType="com.sinloingok.app.dtos.order.NetSiteOrderResDto">
+        SELECT
+        nso.id AS orderId,
+        nso.only_code AS onlyCode,
+        nso.pay_code AS payCode,
+        nso.status,
+        nso.total_amount AS totalAmount,
+        nso.discount_amount AS discountAmount,
+        nso.net_amount AS netAmount,
+        nso.begin_time AS beginTime,
+        nso.end_time AS endTime,
+        ns.name AS siteName,
+        u.nickname,
+        u.mobile,
+        ba.addr_name AS addrName
+        FROM net_site_order nso
+        LEFT JOIN net_site ns ON nso.only_code = ns.only_code
+        LEFT JOIN user u ON nso.user_id = u.id
+        LEFT JOIN bluetooth_address ba ON ns.address_id = ba.id
+        WHERE 1=1
+        <if test="bean.userId != null and bean.userId != 0">
+            AND nso.user_id = #{bean.userId}
+        </if>
+        <if test="bean.addressId != null and bean.addressId != 0">
+            AND ba.id = #{bean.addressId}
+        </if>
+        <if test="bean.orderStatus != null and bean.orderStatus != ''">
+            AND nso.status = #{bean.orderStatus}
+        </if>
+        <if test="bean.payCode != null and bean.payCode != ''">
+            AND nso.pay_code LIKE CONCAT('%', #{bean.payCode}, '%')
+        </if>
+        <if test="bean.mobile != null and bean.mobile != ''">
+            AND u.mobile LIKE CONCAT('%', #{bean.mobile}, '%')
+        </if>
+        <if test="bean.startDate != null and bean.startDate != '' and bean.endDate != null and bean.endDate != ''">
+            AND nso.begin_time BETWEEN #{bean.startDate} AND #{bean.endDate}
+        </if>
+        ORDER BY nso.begin_time DESC
+        <if test="page != null">
+            LIMIT #{page.pageSize} OFFSET #{page.offset}
+        </if>
+    </select>
+
+    <select id="countNetSiteOrderByPage" resultType="integer">
+        SELECT COUNT(*)
+        FROM net_site_order nso
+        LEFT JOIN net_site ns ON nso.only_code = ns.only_code
+        LEFT JOIN user u ON nso.user_id = u.id
+        LEFT JOIN bluetooth_address ba ON ns.address_id = ba.id
+        WHERE 1 = 1
+        <if test="bean.userId != null and bean.userId != 0">
+            AND nso.user_id = #{bean.userId}
+        </if>
+        <if test="bean.payCode != null and bean.payCode != ''">
+            AND nso.pay_code like CONCAT('%', #{bean.payCode}, '%')
+        </if>
+        <if test="bean.addressId != null and bean.addressId != 0">
+            AND ba.id = #{bean.addressId}
+        </if>
+        <if test="bean.orderStatus != null and bean.orderStatus != ''">
+            AND nso.status = #{bean.orderStatus}
+        </if>
+        <if test="bean.mobile != null and bean.mobile != ''">
+            AND u.mobile LIKE CONCAT('%', #{bean.mobile}, '%')
+        </if>
+        <if test="bean.startDate != null and bean.startDate != '' and bean.endDate != null and bean.endDate != ''">
+            AND nso.begin_time between #{bean.startDate} and #{bean.endDate}
+        </if>
+    </select>
+
+    <select id="selectByTypeAndStatus" resultMap="NetSiteOrderMap">
+        SELECT
+        o.id, o.pay_code, o.user_id, o.only_code, o.status,
+        o.total_amount, o.discount_amount, o.net_amount,
+        o.begin_time, o.end_time, o.voucher_id, o.calc,
+
+        i.id AS item_id, i.rule_code, i.rule_name, i.unit_price,
+        i.min_bill_duration, i.max_bill_duration, i.max_price,
+        i.pay_code, i.only_code, i.only_code_port,
+        i.total_duration, i.per_use_duration,
+        i.per_use_start_time, i.create_time, i.update_time
+
+        FROM net_site_order o
+        LEFT JOIN net_site_order_itemized i ON o.pay_code = i.pay_code
+        WHERE o.status = #{status}
+        ORDER BY begin_time DESC
+    </select>
+
+    <!-- 数据操作 -->
+    <insert id="insert" parameterType="com.sinloingok.app.models.net4g.NetSiteOrder" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO net_site_order (pay_code, user_id,
+        only_code,
+        status,
+        total_amount,
+        discount_amount,
+        net_amount,
+        begin_time,
+        end_time,
+        voucher_id,
+        calc
+        ) VALUES (
+        #{payCode},
+        #{userId},
+        #{onlyCode},
+        #{status},
+        #{totalAmount},
+        #{discountAmount},
+        #{netAmount},
+        #{beginTime},
+        #{endTime},
+        #{voucherId},
+        #{calc}
+        )
+    </insert>
+
+    <update id="update" parameterType="com.sinloingok.app.models.net4g.NetSiteOrder">
+        UPDATE net_site_order
+        <set>
+            <!-- 基本字段 -->
+            <if test="payCode != null and payCode != ''">pay_code = #{payCode},</if>
+            <if test="userId != null">user_id = #{userId},</if>
+            <if test="onlyCode != null and onlyCode != ''">only_code = #{onlyCode},</if>
+            <if test="status != null and status != ''">status = #{status},</if>
+
+            <!-- 金额字段 -->
+            <if test="totalAmount != null">total_amount = #{totalAmount},</if>
+            <if test="discountAmount != null">discount_amount = #{discountAmount},</if>
+            <if test="netAmount != null">net_amount = #{netAmount},</if>
+
+            <!-- 时间字段 -->
+            <if test="beginTime != null and beginTime != ''">begin_time = #{beginTime},</if>
+            <if test="endTime != null and endTime != ''">end_time = #{endTime},</if>
+
+            <!-- 其他字段 -->
+            <if test="voucherId != null">voucher_id = #{voucherId},</if>
+            <if test="calc != null and calc != ''">calc = #{calc},</if>
+
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <select id="getDistinctNetSiteOrder" resultMap="NetSiteOrderMap" parameterType="com.sinloingok.app.models.net4g.NetSiteOrder">
+        SELECT
+        o.id, o.pay_code, o.user_id, o.only_code, o.status, o.total_amount, o.discount_amount, o.net_amount, o.voucher_id, o.calc,
+        o.begin_time, o.end_time,
+
+        i.id AS item_id, i.rule_code, i.rule_name, i.unit_price,
+        i.min_bill_duration, i.max_bill_duration, i.max_price,
+        i.pay_code AS item_pay_code, i.only_code AS item_only_code,
+        i.only_code_port, i.total_duration, i.per_use_duration,
+        i.per_use_start_time, i.create_time AS item_create_time, i.update_time
+
+        FROM (
+        SELECT * FROM net_site_order
+        <where>
+            <if test="userId != null">AND user_id = #{userId}</if>
+            <if test="onlyCode != null">AND only_code = #{onlyCode}</if>
+            <if test="status != null">AND status = #{status}</if>
+        </where>
+        ORDER BY begin_time DESC
+        LIMIT 1
+        ) o
+        LEFT JOIN net_site_order_itemized i ON o.pay_code = i.pay_code
+    </select>
+</mapper>

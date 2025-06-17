@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.sinloingok.app.dao.UserAddressAccountDao">
+
+    <resultMap id="BaseResultMap" type="com.sinloingok.app.models.fund.UserAddressAccount">
+        <id column="id" property="id" jdbcType="BIGINT"/>
+        <result column="user_id" property="userId" jdbcType="BIGINT"/>
+        <result column="address_id" property="addressId" jdbcType="BIGINT"/>
+        <result column="balance" property="balance" jdbcType="DECIMAL"/>
+        <result column="ext_money" property="extMoney" jdbcType="DECIMAL"/>
+        <result column="create_time" property="createTime" jdbcType="TIMESTAMP"/>
+        <result column="update_time" property="updateTime" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <select id="findByUserAndAddress" resultMap="BaseResultMap">
+        SELECT *
+        FROM user_address_account
+        WHERE user_id = #{userId} AND address_id = #{addressId}
+        LIMIT 1
+    </select>
+
+    <insert id="insertOrUpdateUserAccount" parameterType="com.sinloingok.app.models.fund.UserAddressAccount"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO user_address_account
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="userId != null and userId != 0">user_id,</if>
+            <if test="addressId != null and addressId != 0">address_id,</if>
+            <if test="balance != null">balance,</if>
+            <if test="extMoney != null">ext_money,</if>
+            update_time,
+        </trim>
+        <trim prefix="VALUES (" suffix=")" suffixOverrides=",">
+            <if test="userId != null and userId != 0">#{userId},</if>
+            <if test="addressId != null and addressId != 0">#{addressId},</if>
+            <if test="balance != null">#{balance},</if>
+            <if test="extMoney != null">#{extMoney},</if>
+            NOW(),
+        </trim>
+        ON DUPLICATE KEY UPDATE
+        <trim suffixOverrides=",">
+            <if test="balance != null">balance = VALUES(balance),</if>
+            <if test="extMoney != null">ext_money = VALUES(ext_money),</if>
+            update_time = NOW(),
+        </trim>
+    </insert>
+
+    <update id="updateBalance">
+        UPDATE user_address_account
+        SET
+        <if test="balance != null">balance = #{balance},</if>
+        <if test="extMoney != null">ext_money = #{extMoney},</if>
+        update_time = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <select id="findByUserAndAddresses" resultMap="BaseResultMap">
+        SELECT *
+        FROM user_address_account
+        WHERE user_id = #{userId}
+        AND address_id IN
+        <foreach item="item" index="index" collection="addressIds"
+                 open="(" separator="," close=")">
+            #{item}
+        </foreach>
+        ORDER BY
+        CASE address_id
+        WHEN #{addressIds[0]} THEN 0  -- 优先使用消费场地的资金
+        ELSE 1
+        END
+    </select>
+</mapper>

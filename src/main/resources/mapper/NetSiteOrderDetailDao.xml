@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.sinloingok.app.dao.NetSiteOrderDetailDao">
+    <resultMap id="NetSiteOrderDetailMap" type="com.sinloingok.app.models.net4g.NetSiteOrderDetail">
+        <id column="id" property="id" />
+        <result column="order_id" property="orderId" />
+        <result column="type" property="type" />
+        <result column="begin_time" property="beginTime" />
+        <result column="end_time" property="endTime" />
+    </resultMap>
+
+    <select id="selectLatest" resultMap="NetSiteOrderDetailMap">
+        SELECT * FROM net_site_order_detail
+        WHERE order_id = #{orderId}
+          AND type = #{type}
+        ORDER BY begin_time DESC
+        LIMIT 1
+    </select>
+
+    <select id="selectOpenDetail" resultMap="NetSiteOrderDetailMap">
+        SELECT * FROM net_site_order_detail
+        WHERE order_id = #{orderId}
+          AND type = #{type}
+        LIMIT 1
+    </select>
+
+    <select id="selectByOrderId" resultMap="NetSiteOrderDetailMap">
+        SELECT * FROM net_site_order_detail
+        WHERE order_id = #{orderId}
+    </select>
+
+    <insert id="insert" parameterType="com.sinloingok.app.models.net4g.NetSiteOrderDetail" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO net_site_order_detail
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="bean.orderId != null">order_id,</if>
+            <if test="bean.type != null">type,</if>
+            <if test="bean.beginTime != null and bean.beginTime != ''">begin_time,</if>
+            <if test="bean.endTime != null and bean.endTime != ''">end_time,</if>
+        </trim>
+        <trim prefix="VALUES (" suffix=")" suffixOverrides=",">
+            <if test="bean.orderId != null">#{bean.orderId},</if>
+            <if test="bean.type != null">#{bean.type},</if>
+            <if test="bean.beginTime != null and bean.beginTime != ''">#{bean.beginTime},</if>
+            <if test="bean.endTime != null and bean.endTime != ''">#{bean.endTime},</if>
+        </trim>
+    </insert>
+
+    <update id="update" parameterType="com.sinloingok.app.models.net4g.NetSiteOrderDetail">
+        UPDATE net_site_order_detail
+        <set>
+            <if test="bean.orderId != null">order_id = #{bean.orderId},</if>
+            <if test="bean.type != null">type = #{bean.type},</if>
+            <if test="bean.beginTime != null and bean.beginTime != ''">begin_time = #{bean.beginTime},</if>
+            <if test="bean.endTime != null and bean.endTime != ''">end_time = #{bean.endTime},</if>
+        </set>
+        WHERE id = #{bean.id}
+    </update>
+</mapper>

@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.sinloingok.app.dao.UserDao">
+
+    <resultMap id="UserResultMap" type="com.sinloingok.app.models.user.User">
+        <id column="id" property="id" jdbcType="BIGINT"/>
+        <result column="open_id" property="openId" jdbcType="VARCHAR"/>
+        <result column="username" property="username" jdbcType="VARCHAR"/>
+        <result column="mobile" property="mobile" jdbcType="VARCHAR"/>
+        <result column="password" property="password" jdbcType="VARCHAR"/>
+        <result column="random_code" property="randomCode" jdbcType="VARCHAR"/>
+        <result column="avatar" property="avatar" jdbcType="VARCHAR"/>
+        <result column="nickname" property="nickname" jdbcType="VARCHAR"/>
+        <result column="money" property="money" jdbcType="DECIMAL"/>
+        <result column="ext_money" property="extMoney" jdbcType="DECIMAL"/>
+        <result column="role_id" property="roleId" jdbcType="BIGINT"/>
+        <result column="level" property="level" jdbcType="VARCHAR"/>
+        <result column="status" property="status" jdbcType="VARCHAR"/>
+        <result column="last_login_ip" property="lastLoginIp" jdbcType="VARCHAR"/>
+        <result column="create_time" property="createTime" jdbcType="VARCHAR"/>
+        <result column="last_login_time" property="lastLoginTime" jdbcType="VARCHAR"/>
+        <result column="balance" property="balance" jdbcType="DECIMAL"/>
+        <result column="new_recharge_time" property="newRechargeTime" jdbcType="VARCHAR"/>
+        <result column="dev_id" property="devId" jdbcType="VARCHAR"/>
+        <!-- 嵌套 UserAddressAccount -->
+        <association property="currentAccount" javaType="com.sinloingok.app.models.fund.UserAddressAccount" resultMap="UserAddressAccountResultMap"/>
+    </resultMap>
+    <!-- 嵌套 user_address_account 的 ResultMap -->
+    <resultMap id="UserAddressAccountResultMap" type="com.sinloingok.app.models.fund.UserAddressAccount">
+        <id column="account_id" property="id"/>
+        <result column="account_user_id" property="userId"/>
+        <result column="address_id" property="addressId"/>
+        <result column="account_balance" property="balance"/>
+        <result column="account_ext_money" property="extMoney"/>
+        <result column="account_create_time" property="createTime"/>
+        <result column="account_update_time" property="updateTime"/>
+    </resultMap>
+
+
+    <sql id="Base_Column_List">
+        u.id, u.open_id, u.username, u.mobile, u.password, u.random_code,
+        u.avatar, u.nickname, u.money, u.ext_money, u.role_id,
+        u.level, u.status, u.last_login_ip, u.create_time, u.last_login_time,
+        u.balance, u.new_recharge_time, u.dev_id,
+
+        -- UserAddressAccount 显式指定别名
+        ada.id AS account_id,
+        ada.user_id AS account_user_id,
+        ada.address_id,
+        ada.balance AS account_balance,
+        ada.ext_money AS account_ext_money,
+        ada.create_time AS account_create_time,
+        ada.update_time AS account_update_time
+    </sql>
+
+    <select id="selectById" resultMap="UserResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM user u left join user_address_account ada on u.id = ada.user_id
+        WHERE u.id = #{id} AND ada.address_id = #{addressId}
+        LIMIT 1
+    </select>
+
+    <select id="countByMobileLike" resultType="java.lang.Long">
+        SELECT COUNT(1)
+        FROM user u left join user_address_account ada on u.id = ada.user_id
+        WHERE 1 = 1
+        <if test="mobile != null and mobile.length > 0">
+            AND u.mobile LIKE CONCAT('%', #{mobile}, '%')
+        </if>
+        <if test="addressId != null and addressId != 0">
+            AND ada.address_id = #{addressId}
+        </if>
+    </select>
+
+    <select id="selectByMobileLike" resultMap="UserResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM user u left join user_address_account ada on u.id = ada.user_id
+        WHERE 1 = 1
+        <if test="mobile != null and mobile.length > 0">
+            AND u.mobile LIKE CONCAT('%', #{mobile}, '%')
+        </if>
+        <if test="addressId != null and addressId != 0">
+            AND ada.address_id = #{addressId}
+        </if>
+        order by u.last_login_time desc
+        <if test="offset != null and pageSize != null and pageSize != 0">
+            LIMIT #{pageSize} OFFSET #{offset}
+        </if>
+    </select>
+
+    <select id="selectByOpenId" resultMap="UserResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM user u left join user_address_account ada on u.id = ada.user_id
+        WHERE u.open_id = #{openId} AND ada.address_id = #{addressId}
+        LIMIT 1
+    </select>
+
+    <update id="updateMoney">
+        UPDATE user
+        SET balance = #{balance}, ext_money = #{extMoney}, money = #{balance} + #{extMoney}
+        WHERE id = #{userId}
+    </update>
+
+    <insert id="insertOrUpdateUser" parameterType="com.sinloingok.app.models.user.User" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO user
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="openId != null and openId != ''">open_id,</if>
+            <if test="username != null and username != ''">username,</if>
+            <if test="mobile != null and mobile != ''">mobile,</if>
+            <if test="password != null and password != ''">password,</if>
+            <if test="randomCode != null and randomCode != ''">random_code,</if>
+            <if test="avatar != null and avatar != ''">avatar,</if>
+            <if test="nickname != null and nickname != ''">nickname,</if>
+            <if test="money != null">money,</if>
+            <if test="extMoney != null">ext_money,</if>
+            <if test="roleId != null and roleId != 0">role_id,</if>
+            <if test="level != null and level != ''">level,</if>
+            <if test="status != null and status != ''">status,</if>
+            <if test="lastLoginIp != null and lastLoginIp != ''">last_login_ip,</if>
+            <if test="createTime != null and createTime != ''">create_time,</if>
+            <if test="lastLoginTime != null and lastLoginTime != ''">last_login_time,</if>
+            <if test="balance != null">balance,</if>
+            <if test="newRechargeTime != null and newRechargeTime != ''">new_recharge_time,</if>
+            <if test="devId != null and devId != ''">dev_id,</if>
+        </trim>
+        <trim prefix="VALUES (" suffix=")" suffixOverrides=",">
+            <if test="openId != null and openId != ''">#{openId},</if>
+            <if test="username != null and username != ''">#{username},</if>
+            <if test="mobile != null and mobile != ''">#{mobile},</if>
+            <if test="password != null and password != ''">#{password},</if>
+            <if test="randomCode != null and randomCode != ''">#{randomCode},</if>
+            <if test="avatar != null and avatar != ''">#{avatar},</if>
+            <if test="nickname != null and nickname != ''">#{nickname},</if>
+            <if test="money != null">#{money},</if>
+            <if test="extMoney != null">#{extMoney},</if>
+            <if test="roleId != null and roleId != 0">#{roleId},</if>
+            <if test="level != null and level != ''">#{level},</if>
+            <if test="status != null and status != ''">#{status},</if>
+            <if test="lastLoginIp != null and lastLoginIp != ''">#{lastLoginIp},</if>
+            <if test="createTime != null and createTime != ''">#{createTime},</if>
+            <if test="lastLoginTime != null and lastLoginTime != ''">#{lastLoginTime},</if>
+            <if test="balance != null">#{balance},</if>
+            <if test="newRechargeTime != null and newRechargeTime != ''">#{newRechargeTime},</if>
+            <if test="devId != null and devId != ''">#{devId},</if>
+        </trim>
+        ON DUPLICATE KEY UPDATE
+        <trim suffixOverrides=",">
+            <if test="username != null and username != ''">username = VALUES(username),</if>
+            <if test="mobile != null and mobile != ''">mobile = VALUES(mobile),</if>
+            <if test="password != null and password != ''">password = VALUES(password),</if>
+            <if test="randomCode != null and randomCode != ''">random_code = VALUES(random_code),</if>
+            <if test="avatar != null and avatar != ''">avatar = VALUES(avatar),</if>
+            <if test="nickname != null and nickname != ''">nickname = VALUES(nickname),</if>
+            <if test="money != null">money = VALUES(money),</if>
+            <if test="extMoney != null">ext_money = VALUES(ext_money),</if>
+            <if test="roleId != null and roleId != 0">role_id = VALUES(role_id),</if>
+            <if test="level != null and level != ''">level = VALUES(level),</if>
+            <if test="status != null and status != ''">status = VALUES(status),</if>
+            <if test="lastLoginIp != null and lastLoginIp != ''">last_login_ip = VALUES(last_login_ip),</if>
+            <if test="lastLoginTime != null and lastLoginTime != ''">last_login_time = VALUES(last_login_time),</if>
+            <if test="balance != null">balance = VALUES(balance),</if>
+            <if test="newRechargeTime != null and newRechargeTime != ''">new_recharge_time = VALUES(new_recharge_time),</if>
+            <if test="devId != null and devId != ''">dev_id = VALUES(dev_id),</if>
+        </trim>
+    </insert>
+
+    <update id="update" parameterType="com.sinloingok.app.models.user.User">
+        UPDATE user
+        <set>
+            <if test="openId != null and openId != ''">open_id = #{openId},</if>
+            <if test="username != null and username != ''">username = #{username},</if>
+            <if test="mobile != null and mobile != ''">mobile = #{mobile},</if>
+            <if test="password != null and password != ''">password = #{password},</if>
+            <if test="randomCode != null and randomCode != ''">random_code = #{randomCode},</if>
+            <if test="avatar != null and avatar != ''">avatar = #{avatar},</if>
+            <if test="nickname != null and nickname != ''">nickname = #{nickname},</if>
+            <if test="money != null">money = #{money},</if>
+            <if test="extMoney != null">ext_money = #{extMoney},</if>
+            <if test="roleId != null and roleId != 0">role_id = #{roleId},</if>
+            <if test="level != null and level != ''">level = #{level},</if>
+            <if test="status != null and status != ''">status = #{status},</if>
+            <if test="lastLoginIp != null and lastLoginIp != ''">last_login_ip = #{lastLoginIp},</if>
+            <if test="lastLoginTime != null and lastLoginTime != ''">last_login_time = #{lastLoginTime},</if>
+            <if test="balance != null">balance = #{balance},</if>
+            <if test="newRechargeTime != null and newRechargeTime != ''">new_recharge_time = #{newRechargeTime},</if>
+            <if test="devId != null and devId != ''">dev_id = #{devId},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+</mapper>

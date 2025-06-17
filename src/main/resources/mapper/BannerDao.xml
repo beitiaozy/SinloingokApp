@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.sinloingok.app.dao.BannerDao">
+
+    <resultMap id="NetSiteInfoResultMap" type="com.sinloingok.app.dtos.common.NetSiteInfoDto">
+        <result property="name" column="name"/>
+        <result property="status" column="status"/>
+        <result property="priceY" column="price_y"/>
+        <result property="priceZ" column="price_z"/>
+        <result property="addrName" column="addr_name"/>
+        <result property="addrPersonName" column="addr_person_name"/>
+        <result property="addrPersonMobile" column="addr_person_mobile"/>
+        <result property="userId" column="user_id"/>
+        <result property="id" column="id"/>
+        <result property="addressId" column="address_id"/>
+        <result property="shouYe" column="shou_ye"/>
+        <result property="huoDong" column="huo_dong"/>
+        <result property="chongZhi" column="chong_zhi"/>
+        <result property="imges" column="imges"/>
+        <result property="type" column="type"/>
+        <result property="prizePm" column="prize_pm"/>
+        <result property="prizeSl" column="prize_sl"/>
+    </resultMap>
+
+    <!-- 基本查询SQL -->
+    <sql id="Base_Query_Sql">
+        SELECT
+        ns.name,
+        ns.status,
+        ba.addr_name,
+        ba.addr_person_name,
+        ba.addr_person_mobile,
+        ns.id,
+        ba.id AS address_id,
+        ba.shou_ye,
+        ba.huo_dong,
+        ba.chong_zhi,
+        ba.imges,
+        '0.03' as prize_pm,
+        '0.03' as prize_sl
+        FROM net_site ns
+        LEFT JOIN bluetooth_address ba ON ns.address_id = ba.id
+    </sql>
+
+    <!-- 根据OnlyCode查询网点信息 -->
+    <select id="selectInfoByOnlyCode" resultMap="NetSiteInfoResultMap">
+        <include refid="Base_Query_Sql"/>
+        WHERE ns.status != #{status}
+        AND ns.only_code = #{onlyCode}
+    </select>
+
+    <select id="selectByActivityType" parameterType="string" resultType="com.sinloingok.app.models.home.HomeImg">
+        SELECT id, img, activity_type, description, shop_id, city_id, district_code,
+               other_url, goods_id, create_time, update_time
+        FROM home_img
+        WHERE activity_type = #{activityType}
+    </select>
+
+    <select id="selectSlgFreeMapper" resultType="java.util.Map">
+        select rule_name, unit_price from net_site_billing_rule order by id;
+    </select>
+
+</mapper>

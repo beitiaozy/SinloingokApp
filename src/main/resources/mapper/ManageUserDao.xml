@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.sinloingok.app.dao.ManageUserDao">
+
+    <resultMap id="BaseResultMap" type="com.sinloingok.app.models.user.ManageUser">
+        <id column="id" property="id" jdbcType="BIGINT"/>
+        <result column="apply_user_id" property="applyUserId" jdbcType="BIGINT"/>
+        <result column="random_code" property="randomCode" jdbcType="VARCHAR"/>
+        <result column="mobile" property="mobile" jdbcType="VARCHAR"/>
+        <result column="username" property="username" jdbcType="VARCHAR"/>
+        <result column="password" property="password" jdbcType="VARCHAR"/>
+        <result column="nickname" property="nickname" jdbcType="VARCHAR"/>
+        <result column="jpushcode" property="jpushcode" jdbcType="VARCHAR"/>
+        <result column="money" property="money" jdbcType="FLOAT"/>
+        <result column="status" property="status" jdbcType="VARCHAR"/>
+        <result column="type" property="type" jdbcType="VARCHAR"/>
+        <result column="last_login_time" property="lastLoginTime" jdbcType="VARCHAR"/>
+        <result column="update_time" property="updateTime" jdbcType="VARCHAR"/>
+        <result column="create_time" property="createTime" jdbcType="VARCHAR"/>
+        <result column="role_id" property="roleId" jdbcType="BIGINT"/>
+        <result column="city_id" property="cityId" jdbcType="VARCHAR"/>
+        <result column="num" property="num" jdbcType="FLOAT"/>
+        <result column="agent_id" property="agentId" jdbcType="BIGINT"/>
+        <result column="rate" property="rate" jdbcType="FLOAT"/>
+        <result column="user_id" property="userId" jdbcType="BIGINT"/>
+        <result column="staff_card" property="staffCard" jdbcType="VARCHAR"/>
+        <result column="daili_rate" property="dailiRate" jdbcType="INTEGER"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, apply_user_id, random_code, mobile, username, password, nickname, jpushcode,
+        money, status, type, last_login_time, update_time, create_time, role_id, city_id,
+        num, agent_id, rate, user_id, staff_card, daili_rate
+    </sql>
+
+    <select id="selectStatusesByApplyUserId" parameterType="long" resultType="string">
+        SELECT status
+        FROM manage_user
+        WHERE apply_user_id = #{applyUserId}
+        ORDER BY create_time DESC
+    </select>
+
+    <!-- 插入用户 -->
+    <insert id="insert" parameterType="com.sinloingok.app.models.user.ManageUser" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO manage_user (
+            apply_user_id, random_code, mobile, username, password, nickname,
+            jpushcode, money, status, type, last_login_time, update_time,
+            create_time, role_id, city_id, num, agent_id, rate, user_id,
+            staff_card, daili_rate
+        ) VALUES (
+                     #{applyUserId}, #{randomCode}, #{mobile}, #{username}, #{password}, #{nickname},
+                     #{jpushcode}, #{money}, #{status}, #{type}, #{lastLoginTime}, #{updateTime},
+                     #{createTime}, #{roleId}, #{cityId}, #{num}, #{agentId}, #{rate}, #{userId},
+                     #{staffCard}, #{dailiRate}
+                 )
+    </insert>
+
+    <!-- 更新用户 -->
+    <update id="update" parameterType="com.sinloingok.app.models.user.ManageUser">
+        UPDATE manage_user
+        <set>
+            <if test="applyUserId != null">apply_user_id = #{applyUserId},</if>
+            <if test="randomCode != null">random_code = #{randomCode},</if>
+            <if test="mobile != null">mobile = #{mobile},</if>
+            <if test="username != null">username = #{username},</if>
+            <if test="password != null">password = #{password},</if>
+            <if test="nickname != null">nickname = #{nickname},</if>
+            <if test="jpushcode != null">jpushcode = #{jpushcode},</if>
+            <if test="money != null">money = #{money},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="type != null">type = #{type},</if>
+            <if test="lastLoginTime != null">last_login_time = #{lastLoginTime},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="roleId != null">role_id = #{roleId},</if>
+            <if test="cityId != null">city_id = #{cityId},</if>
+            <if test="num != null">num = #{num},</if>
+            <if test="agentId != null">agent_id = #{agentId},</if>
+            <if test="rate != null">rate = #{rate},</if>
+            <if test="userId != null">user_id = #{userId},</if>
+            <if test="staffCard != null">staff_card = #{staffCard},</if>
+            <if test="dailiRate != null">daili_rate = #{dailiRate},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+    <!-- 根据ID查询用户 -->
+    <select id="selectById" parameterType="java.lang.Long" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM manage_user
+        WHERE id = #{id}
+    </select>
+
+    <!-- 根据条件查询用户列表 -->
+    <select id="queryByManageUser" parameterType="com.sinloingok.app.models.user.ManageUser" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM manage_user
+        <where>
+            <if test="id != null">AND id = #{id}</if>
+            <if test="applyUserId != null">AND apply_user_id = #{applyUserId}</if>
+            <if test="randomCode != null and randomCode != ''">AND random_code = #{randomCode}</if>
+            <if test="mobile != null and mobile != ''">AND mobile = #{mobile}</if>
+            <if test="username != null and username != ''">AND username = #{username}</if>
+            <if test="nickname != null and nickname != ''">AND nickname = #{nickname}</if>
+            <if test="jpushcode != null and jpushcode != ''">AND jpushcode = #{jpushcode}</if>
+            <if test="money != null">AND money = #{money}</if>
+            <if test="status != null and status != ''">AND status = #{status}</if>
+            <if test="type != null and type != ''">AND type = #{type}</if>
+            <if test="roleId != null">AND role_id = #{roleId}</if>
+            <if test="cityId != null and cityId != ''">AND city_id = #{cityId}</if>
+            <if test="num != null">AND num = #{num}</if>
+            <if test="agentId != null">AND agent_id = #{agentId}</if>
+            <if test="rate != null">AND rate = #{rate}</if>
+            <if test="userId != null">AND user_id = #{userId}</if>
+            <if test="staffCard != null and staffCard != ''">AND staff_card = #{staffCard}</if>
+            <if test="dailiRate != null">AND daili_rate = #{dailiRate}</if>
+        </where>
+    </select>
+
+</mapper>

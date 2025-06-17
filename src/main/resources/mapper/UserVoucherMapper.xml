@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.sinloingok.app.dao.UserVoucherMapper">
+
+    <!-- 通用查询结果映射 -->
+    <resultMap id="BaseResultMap" type="com.sinloingok.app.models.voucher.UserVoucher">
+        <id column="id" property="id" jdbcType="BIGINT"/>
+        <result column="user_id" property="userId" jdbcType="BIGINT"/>
+        <result column="address_id" property="addressId" jdbcType="BIGINT"/>
+        <result column="pay_code" property="payCode" jdbcType="VARCHAR"/>
+        <result column="status" property="status" jdbcType="VARCHAR"/>
+        <result column="amount" property="amount" jdbcType="INTEGER"/>
+        <result column="total_money" property="totalMoney" jdbcType="DECIMAL"/>
+        <result column="create_time" property="createTime" jdbcType="TIMESTAMP"/>
+        <result column="expire_date" property="expireDate" jdbcType="DATE"/>
+        <result column="finish_time" property="finishTime" jdbcType="TIMESTAMP"/>
+        <result column="use_time" property="useTime" jdbcType="TIMESTAMP"/>
+        <result column="type" property="type" jdbcType="VARCHAR"/>
+        <result column="addr_name" property="addressName" jdbcType="VARCHAR"/>
+    </resultMap>
+
+    <!-- 通用查询字段 -->
+    <sql id="Base_Column_List">
+        uv.id, uv.user_id, uv.address_id, uv.pay_code, uv.status, uv.amount, uv.total_money,
+        uv.create_time, uv.expire_date, uv.finish_time, uv.use_time, uv.type, ba.addr_name
+    </sql>
+
+    <!-- 根据条件查询卡券列表 -->
+    <select id="selectByVoucher" parameterType="com.sinloingok.app.models.voucher.UserVoucher" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM user_voucher uv left join bluetooth_address ba on ba.id = uv.address_id where amount > 0
+        <if test="userId != null and userId != 0">
+            AND uv.user_id = #{userId}
+        </if>
+        <if test="addressId != null and addressId != 0">
+            AND uv.address_id = #{addressId}
+        </if>
+        <if test="payCode != null and payCode != ''">
+            AND uv.pay_code = #{payCode}
+        </if>
+        <if test="status != null and status != ''">
+            AND uv.status = #{status}
+        </if>
+        <if test="type != null and type != ''">
+            AND uv.type = #{type}
+        </if>
+        <if test="expireDate != null">
+            AND uv.expire_date = #{expireDate}
+        </if>
+
+        <if test="useTime != null and useTime != ''">
+            AND uv.use_time &lt;= #{useTime}
+        </if>
+        ORDER BY uv.create_time DESC
+    </select>
+
+    <!-- 根据ID查询卡券 -->
+    <select id="selectVoucherById" parameterType="java.lang.Long" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM user_voucher uv left join bluetooth_address ba on ba.id = uv.address_id
+        WHERE uv.id = #{id}
+    </select>
+
+    <!-- 新增卡券 -->
+    <insert id="insert" parameterType="com.sinloingok.app.models.voucher.UserVoucher" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO user_voucher
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="userId != null">user_id,</if>
+            <if test="addressId != null">address_id,</if>
+            <if test="payCode != null and payCode != ''">pay_code,</if>
+            <if test="status != null and status != ''">status,</if>
+            <if test="amount != null">amount,</if>
+            <if test="totalMoney != null">total_money,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="expireDate != null">expire_date,</if>
+            <if test="finishTime != null">finish_time,</if>
+            <if test="useTime != null">use_time,</if>
+            <if test="type != null and type != ''">type,</if>
+        </trim>
+        <trim prefix="VALUES (" suffix=")" suffixOverrides=",">
+            <if test="userId != null">#{userId},</if>
+            <if test="addressId != null">#{addressId},</if>
+            <if test="payCode != null and payCode != ''">#{payCode},</if>
+            <if test="status != null and status != ''">#{status},</if>
+            <if test="amount != null">#{amount},</if>
+            <if test="totalMoney != null">#{totalMoney},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="expireDate != null">#{expireDate},</if>
+            <if test="finishTime != null">#{finishTime},</if>
+            <if test="useTime != null">#{useTime},</if>
+            <if test="type != null and type != ''">#{type},</if>
+        </trim>
+    </insert>
+
+    <!-- 批量新增卡券 -->
+    <insert id="insertList" parameterType="java.util.List">
+        INSERT INTO user_voucher
+        (user_id, address_id, pay_code, status, amount, total_money,
+        create_time, expire_date, finish_time, use_time, type)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (
+            #{item.userId},
+            #{item.addressId},
+            #{item.payCode},
+            #{item.status},
+            #{item.amount},
+            #{item.totalMoney},
+            #{item.createTime},
+            #{item.expireDate},
+            #{item.finishTime},
+            #{item.useTime},
+            #{item.type}
+            )
+        </foreach>
+    </insert>
+
+    <!-- 更新卡券信息 -->
+    <update id="update" parameterType="com.sinloingok.app.models.voucher.UserVoucher">
+        UPDATE user_voucher
+        <set>
+            <if test="userId != null">user_id = #{userId},</if>
+            <if test="addressId != null">address_id = #{addressId},</if>
+            <if test="payCode != null and payCode != ''">pay_code = #{payCode},</if>
+            <if test="status != null and status != ''">status = #{status},</if>
+            <if test="amount != null">amount = #{amount},</if>
+            <if test="totalMoney != null">total_money = #{totalMoney},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="expireDate != null">expire_date = #{expireDate},</if>
+            <if test="finishTime != null">finish_time = #{finishTime},</if>
+            <if test="useTime != null">use_time = #{useTime},</if>
+            <if test="type != null and type != ''">type = #{type},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <!-- 根据ID删除卡券 -->
+    <delete id="deleteById" parameterType="java.lang.Long">
+        DELETE FROM user_voucher WHERE id = #{id}
+    </delete>
+
+</mapper>

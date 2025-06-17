@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.sinloingok.app.dao.BluetoothAddressRechargeDao">
+    <resultMap id="BluetoothAddressRecharge2ResultMap" type="com.sinloingok.app.models.bluetooth.BluetoothAddressRecharge">
+        <id property="id" column="id" />
+        <result property="title" column="title" />
+        <result property="money" column="money" />
+        <result property="awards" column="awards" />
+        <result property="remainingDays" column="remaining_days" />
+        <result property="expirationDate" column="expiration_date" />
+        <result property="type" column="type" />
+        <result property="addressId" column="address_id" />
+        <result property="userLevel" column="user_level" />
+        <result property="enable" column="enable" />
+        <result property="createTime" column="create_time" />
+    </resultMap>
+    <delete id="deleteById">delete from bluetooth_address_recharge where id = #{rechargeId}</delete>
+
+
+    <select id="rechargeListWithNewRecord" resultMap="BluetoothAddressRecharge2ResultMap">
+        SELECT * FROM bluetooth_address_recharge
+        WHERE address_id = #{addressId}
+        <if test="expirationDate != null and expirationDate != ''">
+            and expiration_date >= #{expirationDate}
+        </if>
+        order by money
+    </select>
+
+
+    <select id="selectById" resultMap="BluetoothAddressRecharge2ResultMap">
+        SELECT * FROM bluetooth_address_recharge WHERE id = #{id} LIMIT 1
+    </select>
+
+    <insert id="insertBluetoothAddressRecharge" parameterType="com.sinloingok.app.models.bluetooth.BluetoothAddressRecharge" useGeneratedKeys="true" keyProperty="bean.id">
+        INSERT INTO bluetooth_address_recharge
+        (id, title, money, awards, remaining_days, expiration_date, type, address_id, enable, user_level, create_time)
+        VALUES
+        (#{bean.id}, #{bean.title}, #{bean.money}, #{bean.awards}, #{bean.remainingDays}, #{bean.expirationDate}, #{bean.type}, #{bean.addressId}, #{bean.enable}, #{bean.userLevel}, #{bean.createTime})
+    </insert>
+
+    <update id="updateBluetoothAddressRecharge" parameterType="com.sinloingok.app.models.bluetooth.BluetoothAddressRecharge">
+        UPDATE bluetooth_address_recharge
+        <set>
+            <!-- String 字段：判空 + 判空串 -->
+            <if test="bean.title != null and bean.title != ''">title = #{bean.title},</if>
+            <if test="bean.remainingDays != null and bean.remainingDays != ''">remaining_days = #{bean.remainingDays},</if>
+            <if test="bean.expirationDate != null and bean.expirationDate != ''">expiration_date = #{bean.expirationDate},</if>
+            <if test="bean.type != null and bean.type != ''">type = #{bean.type},</if>
+            <if test="bean.userLevel != null and bean.userLevel != ''">user_level = #{bean.userLevel},</if>
+            <if test="bean.createTime != null and bean.createTime != ''">create_time = #{bean.createTime},</if>
+
+            <!-- 数值/ID 字段：只判 null -->
+            <if test="bean.money != null">money = #{bean.money},</if>
+            <if test="bean.awards != null">awards = #{bean.awards},</if>
+            <if test="bean.addressId != null">address_id = #{bean.addressId},</if>
+            <if test="bean.enable != null">enable = #{bean.enable},</if>
+        </set>
+        WHERE id = #{bean.id}
+    </update>
+</mapper>

@@ -1,0 +1,241 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.sinloingok.app.dao.RechargeOrderDao">
+    <resultMap id="RechargeOrderMap" type="com.sinloingok.app.models.user.RechargeOrder">
+        <id column="id" property="id"/>
+        <result column="code" property="code"/>
+        <result column="user_id" property="userId"/>
+        <result column="recharge_id" property="rechargeId"/>
+        <result column="address_id" property="addressId"/>
+        <result column="status" property="status"/>
+        <result column="create_time" property="createTime"/>
+        <result column="money" property="money"/>
+        <result column="awards" property="awards"/>
+    </resultMap>
+
+    <!-- 充值订单DTO结果映射 -->
+    <resultMap id="RechargeOrderResDtoMap" type="com.sinloingok.app.dtos.user.RechargeOrderResDto">
+        <id column="recharge_id" property="rechargeId"/>
+        <result column="code" property="code"/>
+        <result column="create_time" property="createTime"/>
+        <result column="status" property="status"/>
+        <result column="user_id" property="userId"/>
+        <result column="nickname" property="nickname"/>
+        <result column="mobile" property="mobile"/>
+        <result column="money" property="money"/>
+        <result column="ext_money" property="extMoney"/>
+        <result column="order_money" property="orderMoney"/>
+        <result column="order_ext_money" property="orderExtMoney"/>
+        <result column="address_id" property="addressId"/>
+        <result column="short_name" property="shortName"/>
+        <result column="addr_name" property="addrName"/>
+        <result column="addr_person_name" property="addrPersonName"/>
+        <result column="addr_person_mobile" property="addrPersonMobile"/>
+        <result column="type" property="type"/>
+    </resultMap>
+
+    <!-- 分页查询充值订单 -->
+    <select id="selectRechargeOrderByPage" resultMap="RechargeOrderResDtoMap">
+        SELECT
+        ro.recharge_id,
+        ro.code,
+        ro.create_time,
+        ro.status,
+        ro.type,
+        ro.user_id,
+        u.nickname,
+        u.mobile,
+        u.money,
+        u.ext_money,
+        ro.money AS order_money,
+        ro.awards AS order_ext_money,
+        ro.address_id,
+        ba.short_name,
+        ba.addr_name,
+        ba.addr_person_name,
+        ba.addr_person_mobile
+        FROM recharge_order ro
+        LEFT JOIN user u ON ro.user_id = u.id
+        LEFT JOIN bluetooth_address ba ON ro.address_id = ba.id
+        <where>
+            <if test="bean.addressId != null and bean.addressId != 0">
+                AND ro.address_id = #{bean.addressId}
+            </if>
+            <if test="bean.userId != null and bean.userId != 0">
+                AND ro.user_id = #{bean.userId}
+            </if>
+            <if test="bean.status != null and bean.status != ''">
+                AND ro.status = #{bean.status}
+            </if>
+            <if test="bean.startDate != null and bean.startDate != ''">
+                AND ro.create_time >= #{bean.startDate}
+            </if>
+            <if test="bean.endDate != null and bean.endDate != ''">
+                AND ro.create_time &lt;= #{bean.endDate}
+            </if>
+            <if test="bean.mobile != null and bean.mobile != ''">
+                AND u.mobile LIKE CONCAT('%', #{bean.mobile}, '%')
+            </if>
+        </where>
+        ORDER BY ro.create_time DESC
+        <if test="page != null">
+            LIMIT #{page.pageSize} OFFSET #{page.offset}
+        </if>
+    </select>
+
+    <!-- 统计符合条件的订单数量 -->
+    <select id="countRechargeOrder" resultType="int">
+        SELECT COUNT(*)
+        FROM recharge_order ro
+        LEFT JOIN user u ON ro.user_id = u.id
+        LEFT JOIN bluetooth_address ba ON ro.address_id = ba.id
+        <where>
+            <if test="bean.addressId != null and bean.addressId != 0">
+                AND ro.address_id = #{bean.addressId}
+            </if>
+            <if test="bean.userId != null and bean.userId != 0">
+                AND ro.user_id = #{bean.userId}
+            </if>
+            <if test="bean.status != null and bean.status != ''">
+                AND ro.status = #{bean.status}
+            </if>
+            <if test="bean.startDate != null and bean.startDate != ''">
+                AND ro.create_time >= #{bean.startDate}
+            </if>
+            <if test="bean.endDate != null and bean.endDate != ''">
+                AND ro.create_time &lt;= #{bean.endDate}
+            </if>
+            <if test="bean.mobile != null and bean.mobile != ''">
+                AND u.mobile LIKE CONCAT('%', #{bean.mobile}, '%')
+            </if>
+        </where>
+    </select>
+
+    <!-- 多条件查询充值订单 -->
+    <select id="selectRechargeOrderByCondition" resultMap="RechargeOrderResDtoMap">
+        SELECT
+        ro.recharge_id,
+        ro.code,
+        ro.create_time,
+        ro.status,
+        ro.type,
+        ro.user_id,
+        u.nickname,
+        u.mobile,
+        u.money,
+        u.ext_money,
+        ro.money AS order_money,
+        ro.awards AS order_ext_money,
+        ro.address_id,
+        ba.short_name,
+        ba.addr_name,
+        ba.addr_person_name,
+        ba.addr_person_mobile
+        FROM recharge_order ro
+        LEFT JOIN user u ON ro.user_id = u.id
+        LEFT JOIN bluetooth_address ba ON ro.address_id = ba.id
+        <where>
+            <if test="bean.code != null and bean.code != ''">
+                AND ro.code LIKE CONCAT('%', #{bean.code}, '%')
+            </if>
+            <if test="bean.rechargeId != null">
+                AND ro.recharge_id = #{bean.rechargeId}
+            </if>
+            <if test="bean.addressId != null and bean.addressId != 0">
+                AND ro.address_id = #{bean.addressId}
+            </if>
+            <if test="bean.userId != null and bean.userId != 0">
+                AND ro.user_id = #{bean.userId}
+            </if>
+            <if test="bean.status != null and bean.status != ''">
+                AND ro.status = #{bean.status}
+            </if>
+            <if test="bean.startDate != null and bean.startDate != ''">
+                AND ro.create_time >= #{bean.startDate}
+            </if>
+            <if test="bean.endDate != null and bean.endDate != ''">
+                AND ro.create_time &lt;= #{bean.endDate}
+            </if>
+            <if test="bean.mobile != null and bean.mobile != ''">
+                AND u.mobile LIKE CONCAT('%', #{bean.mobile}, '%')
+            </if>
+        </where>
+        ORDER BY ro.create_time DESC
+    </select>
+
+
+    <!-- 统计时间段内的金额/奖励总和 -->
+    <select id="sumMoneyAwards" resultType="map">
+        SELECT
+            IFNULL(SUM(ro.money), 0) AS total_money,
+            IFNULL(count(ro.money), 0) AS order_count,
+            IFNULL(SUM(ro.awards), 0) AS total_awards
+        FROM recharge_order ro
+        WHERE 1 = 1
+        <if test="bean.addressId != null and bean.addressId != 0">
+            AND ro.address_id = #{bean.addressId}
+        </if>
+        <if test="bean.userId != null and bean.userId != 0">
+            AND ro.user_id = #{bean.userId}
+        </if>
+        <if test="bean.status != null and bean.status != ''">
+            AND ro.status = #{bean.status}
+        </if>
+        <if test="bean.startDate != null and bean.startDate != ''">
+            AND ro.create_time >= #{bean.startDate}
+        </if>
+        <if test="bean.endDate != null and bean.endDate != ''">
+            AND ro.create_time &lt;= #{bean.endDate}
+        </if>
+    </select>
+
+
+    <select id="selectByCodeAndUser" resultMap="RechargeOrderMap">
+        SELECT id, code, user_id, recharge_id, address_id, status, create_time, money, awards, type
+        FROM recharge_order
+        WHERE code = #{code}
+        AND user_id = #{userId}
+        LIMIT 1
+    </select>
+
+    <select id="selectLatestByUserAndStatus" resultMap="RechargeOrderMap">
+        SELECT id, code, user_id, recharge_id, address_id, status, create_time, money, awards, type
+        FROM recharge_order
+        WHERE user_id = #{userId}
+        AND status = #{status}
+        ORDER BY create_time DESC
+        LIMIT 1
+    </select>
+
+    <insert id="insert" parameterType="com.sinloingok.app.models.user.RechargeOrder" useGeneratedKeys="true"
+            keyProperty="id">
+        INSERT INTO recharge_order (
+        code, user_id, recharge_id, address_id, status, create_time, money, awards, type
+        ) VALUES (
+        #{code}, #{userId}, #{rechargeId}, #{addressId}, #{status}, #{createTime}, #{money}, #{awards}, #{type}
+        )
+    </insert>
+
+    <select id="selectById" resultMap="RechargeOrderMap">
+        SELECT id, code, user_id, recharge_id, address_id, status, create_time, money, awards, type
+        FROM recharge_order
+        WHERE id = #{id}
+        LIMIT 1
+    </select>
+
+    <update id="update" parameterType="com.sinloingok.app.models.user.RechargeOrder">
+        UPDATE recharge_order
+        <set>
+            <if test="code != null and code != ''">code = #{code},</if>
+            <if test="userId != 0">user_id = #{userId},</if>
+            <if test="rechargeId != 0">recharge_id = #{rechargeId},</if>
+            <if test="addressId != 0">address_id = #{addressId},</if>
+            <if test="status != null and status != ''">status = #{status},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="money != null">money = #{money},</if>
+            <if test="awards != null">awards = #{awards},</if>
+            <if test="type != null and type != ''">type = #{type},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+</mapper>

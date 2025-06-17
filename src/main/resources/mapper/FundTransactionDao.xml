@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.sinloingok.app.dao.FundTransactionDao">
+
+    <resultMap id="BaseResultMap" type="com.sinloingok.app.models.fund.FundTransaction">
+        <id column="id" property="id" jdbcType="BIGINT"/>
+        <result column="user_id" property="userId" jdbcType="BIGINT"/>
+        <result column="address_id" property="addressId" jdbcType="BIGINT"/>
+        <result column="source_address_id" property="sourceAddressId" jdbcType="BIGINT"/>
+        <result column="amount" property="amount" jdbcType="DECIMAL"/>
+        <result column="balance_before" property="balanceBefore" jdbcType="DECIMAL"/>
+        <result column="balance_after" property="balanceAfter" jdbcType="DECIMAL"/>
+        <result column="ext_money_before" property="extMoneyBefore" jdbcType="DECIMAL"/>
+        <result column="ext_money_after" property="extMoneyAfter" jdbcType="DECIMAL"/>
+        <result column="pay_code" property="payCode" jdbcType="VARCHAR"/>
+        <result column="type" property="type" jdbcType="TINYINT"/>
+        <result column="status" property="status" jdbcType="TINYINT"/>
+        <result column="remark" property="remark" jdbcType="VARCHAR"/>
+        <result column="message" property="message" jdbcType="VARCHAR"/>
+        <result column="create_time" property="createTime" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.sinloingok.app.models.fund.FundTransaction"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO fund_transaction (
+        user_id, address_id, source_address_id, amount,
+        balance_before, balance_after, ext_money_before, ext_money_after,
+        pay_code, type, status, remark, message
+        ) VALUES (
+        #{userId}, #{addressId}, #{sourceAddressId}, #{amount},
+        #{balanceBefore}, #{balanceAfter}, #{extMoneyBefore}, #{extMoneyAfter},
+        #{payCode}, #{type}, #{status}, #{remark}, #{message}
+        )
+    </insert>
+
+    <select id="findByPayCode" resultMap="BaseResultMap">
+        SELECT *
+        FROM fund_transaction
+        WHERE pay_code = #{payCode}
+        LIMIT 1
+    </select>
+
+    <update id="updateStatusAndMessage">
+        UPDATE fund_transaction
+        SET status = #{status},
+        message = #{message}
+        WHERE id = #{id}
+    </update>
+</mapper>

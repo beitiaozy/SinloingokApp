@@ -1,0 +1,96 @@
+#spring:
+#  datasource:
+#    url: jdbc:mysql://localhost:3306/sinloingok-hm?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
+#    username: root
+#    password: admin
+#    driver-class-name: com.mysql.cj.jdbc.Driver
+#  jackson:
+#    property-naming-strategy: SNAKE_CASE
+spring:
+# 内存泄漏防护 (对应 JreMemoryLeakPreventionListener)
+  jmx:
+    enabled: true # 对应 GlobalResourcesLifecycleListener
+  application:
+    name: Sinloingok
+  datasource:
+    url: jdbc:mysql://47.94.103.164:3306/info?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
+    username: whisper
+    password: wsj2875511
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+
+#server:
+#  port: 8080
+
+server:
+  port: 443
+  # HTTPS 配置
+  ssl:
+    enabled: true
+    key-store: file:/sinloingok/cert/acc.dakakj.com.pfx
+    key-store-type: PKCS12
+    key-store-password: l4gluw2a
+    key-alias: alias
+    protocol: TLS
+    ciphers: TLS_RSA_WITH_AES_128_CBC_SHA,TLS_RSA_WITH_AES_256_CBC_SHA,TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,TLS_RSA_WITH_AES_128_CBC_SHA256,TLS_RSA_WITH_AES_256_CBC_SHA256
+
+  # Tomcat 特定配置
+  tomcat:
+    connection-timeout: 20000
+    # 启用 HTTP 自动重定向到 HTTPS
+    redirect-context-root: false
+    # 访问日志配置
+    accesslog:
+      enabled: true
+      directory: logs
+      prefix: localhost_access_log
+      suffix: .txt
+      pattern: '%h %l %u %t "%r" %s %b'
+
+  # HTTP 自动重定向到 HTTPS
+  http:
+    port: 8080
+    redirect: https
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+#  configuration:
+#    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl  # 显示 SQL 到控制台
+
+
+# Netty服务器自定义配置
+netty:
+  server:
+    port: 18080 # Netty服务器监听端口
+    host: 0.0.0.0 # 绑定地址，0.0.0.0表示所有网络接口
+    boss-threads: 1 # Boss线程组线程数，通常1个足够
+    worker-threads: 0 # Worker线程组线程数，0表示使用Netty默认值(CPU核心数*2)
+    so-backlog: 512 # 等待连接队列大小
+    so-keepalive: true # 是否启用TCP KeepAlive
+    idle:
+      read-seconds: 30
+      write-seconds: 10
+    timeout:
+      read-seconds: 20
+      write-seconds: 10
+    enable-traffic-shaping: false
+    traffic:
+      write-bytes-per-sec: 16777216
+      read-bytes-per-sec: 16777216
+
+sinloingok:
+  wechat:
+    notifyUrlRecharge: "https://acc.dakakj.com/payment/sbpaycallForRecharge"
+
+logging:
+  level:
+    root: INFO
+    org.springframework.web: INFO          # Spring MVC日志
+    org.hibernate.SQL: INFO               # Hibernate SQL日志
+    com.sinloingok.app: INFO               # 项目包日志
+  file:
+    name: logs/app.log                     # 输出到文件
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"

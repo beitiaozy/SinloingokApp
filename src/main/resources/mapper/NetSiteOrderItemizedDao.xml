@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.sinloingok.app.dao.NetSiteOrderItemizedDao">
+
+    <resultMap id="BaseResultMap" type="com.sinloingok.app.models.net4g.NetSiteOrderItemized">
+        <id column="id" property="id" />
+        <result column="rule_code" property="ruleCode" />
+        <result column="rule_name" property="ruleName" />
+        <result column="unit_price" property="unitPrice" />
+        <result column="min_bill_duration" property="minBillDuration" />
+        <result column="max_bill_duration" property="maxBillDuration" />
+        <result column="max_price" property="maxPrice" />
+        <result column="pay_code" property="payCode" />
+        <result column="only_code" property="onlyCode" />
+        <result column="only_code_port" property="onlyCodePort" />
+        <result column="total_duration" property="totalDuration" />
+        <result column="per_use_duration" property="perUseDuration" />
+        <result column="per_use_start_time" property="perUseStartTime" />
+        <result column="create_time" property="createTime" />
+        <result column="update_time" property="updateTime" />
+    </resultMap>
+
+    <!-- 插入记录 -->
+    <insert id="insert" parameterType="com.sinloingok.app.models.net4g.NetSiteOrderItemized"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO net_site_order_itemized (
+        rule_code, rule_name, unit_price, min_bill_duration, max_bill_duration, max_price,
+        pay_code, only_code, only_code_port, total_duration, per_use_duration, per_use_start_time
+        ) VALUES (
+        #{ruleCode}, #{ruleName}, #{unitPrice}, #{minBillDuration}, #{maxBillDuration}, #{maxPrice},
+        #{payCode}, #{onlyCode}, #{onlyCodePort}, #{totalDuration},  #{perUseDuration}, #{perUseStartTime}
+        )
+    </insert>
+
+    <!-- 动态更新 -->
+    <update id="updateSelective" parameterType="com.sinloingok.app.models.net4g.NetSiteOrderItemized">
+        UPDATE net_site_order_itemized
+        <set>
+            <if test="ruleCode != null and ruleCode != ''">rule_code = #{ruleCode},</if>
+            <if test="ruleName != null and ruleName != ''">rule_name = #{ruleName},</if>
+            <if test="unitPrice != null">unit_price = #{unitPrice},</if>
+            <if test="minBillDuration != null">min_bill_duration = #{minBillDuration},</if>
+            <if test="maxBillDuration != null">max_bill_duration = #{maxBillDuration},</if>
+            <if test="maxPrice != null">max_price = #{maxPrice},</if>
+            <if test="payCode != null and payCode != ''">pay_code = #{payCode},</if>
+            <if test="onlyCode != null and onlyCode != ''">only_code = #{onlyCode},</if>
+            <if test="onlyCodePort != null">only_code_port = #{onlyCodePort},</if>
+            <if test="totalDuration != null">total_duration = #{totalDuration},</if>
+            <if test="perUseDuration != null">per_use_duration = #{perUseDuration},</if>
+            per_use_start_time = #{perUseStartTime},
+            update_time = NOW()
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <!-- 根据条件查询列表 -->
+    <select id="selectByCondition" parameterType="map" resultMap="BaseResultMap">
+        SELECT * FROM net_site_order_itemized
+        <where>
+            <if test="ruleCode != null and ruleCode != ''">AND rule_code = #{ruleCode}</if>
+            <if test="ruleName != null and ruleName != ''">AND rule_name LIKE CONCAT('%', #{ruleName}, '%')</if>
+            <if test="payCode != null and payCode != ''">AND pay_code = #{payCode}</if>
+            <if test="onlyCode != null and onlyCode != ''">AND only_code = #{onlyCode}</if>
+            <if test="onlyCodePort != null">AND only_code_port = #{onlyCodePort}</if>
+            <if test="startTime != null">AND per_use_start_time >= #{startTime}</if>
+            <if test="endTime != null">AND per_use_start_time &lt;= #{endTime}</if>
+            <if test="minAmount != null">AND per_use_amount >= #{minAmount}</if>
+            <if test="maxAmount != null">AND per_use_amount &lt;= #{maxAmount}</if>
+        </where>
+        ORDER BY create_time DESC
+        <if test="limit != null">LIMIT #{limit}</if>
+    </select>
+
+    <!-- 根据唯一键查询 -->
+    <select id="selectByUniqueKey" resultMap="BaseResultMap">
+        SELECT * FROM net_site_order_itemized
+        WHERE pay_code = #{payCode}
+        AND only_code_port = #{onlyCodePort}
+    </select>
+
+</mapper>

@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.sinloingok.app.dao.NetSiteDao">
+    <resultMap id="NetSiteMap" type="com.sinloingok.app.models.net4g.NetSite">
+        <id column="id" property="id"/>
+        <result column="address_id" property="addressId"/>
+        <result column="terminal_sn" property="terminalSn"/>
+        <result column="terminal_key" property="terminalKey"/>
+        <result column="name" property="name"/>
+        <result column="only_code" property="onlyCode"/>
+        <result column="status" property="status"/>
+        <result column="purpose" property="purpose"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+        <result column="heart_time" property="heartTime"/>
+        <result column="base_unit_amount" property="baseUnitAmount"/>
+    </resultMap>
+
+    <!-- 基础查询列 -->
+    <sql id="Base_Column_List">
+        ns.id, ns.only_code, ns.name, ns.address_id, ns.terminal_sn, ns.terminal_key,
+        ns.status, ns.purpose, ns.create_time, ns.update_time, ns.heart_time, ns.base_unit_amount,
+        mu.username, mu.mobile, mu.daili_rate
+    </sql>
+
+    <!-- 分页查询条件 -->
+    <sql id="Page_Query_Condition">
+        <where>
+            <if test="bean.name != null and bean.name != ''">
+                AND ns.name LIKE CONCAT('%', #{bean.name}, '%')
+            </if>
+            <if test="bean.status != null and bean.status != ''">
+                AND ns.status = #{bean.status}
+            </if>
+            <if test="bean.status == null or bean.status == ''">
+                AND ns.status != '删除'
+            </if>
+            <if test="bean.terminalSn != null and bean.terminalSn != ''">
+                AND ns.terminal_sn LIKE CONCAT('%', #{bean.terminalSn}, '%')
+            </if>
+            <if test="bean.onlyCode != null and bean.onlyCode != ''">
+                AND ns.only_code = #{bean.onlyCode}
+            </if>
+        </where>
+    </sql>
+
+    <!-- 分页查询（使用MyBatis-Plus分页） -->
+    <select id="selectNetSitePage" resultMap="NetSiteMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM net_site ns LEFT JOIN manage_user mu ON ns.manager_id = mu.id
+        <include refid="Page_Query_Condition"/>
+        ORDER BY create_time DESC
+        <if test="page != null">
+            LIMIT #{page.pageSize} OFFSET #{page.offset}
+        </if>
+    </select>
+
+    <!-- 分页查询总数 -->
+    <select id="countNetSites" resultType="int">
+        SELECT COUNT(*)
+        FROM net_site ns LEFT JOIN manage_user mu ON ns.manager_id = mu.id
+        <include refid="Page_Query_Condition"/>
+    </select>
+
+    <select id="selectByOnlyCode" parameterType="string" resultMap="NetSiteMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM net_site ns LEFT JOIN manage_user mu ON ns.manager_id = mu.id
+        WHERE ns.only_code = #{onlyCode}
+        AND ns.status != '删除'
+        LIMIT 1
+    </select>
+
+
+    <select id="selectActive" resultMap="NetSiteMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM net_site ns LEFT JOIN manage_user mu ON ns.manager_id = mu.id
+        WHERE ns.status != '删除'
+    </select>
+
+    <select id="selectById" parameterType="long" resultMap="NetSiteMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM net_site ns LEFT JOIN manage_user mu ON ns.manager_id = mu.id
+        WHERE ns.id = #{id} LIMIT 1
+    </select>
+
+    <update id="updateTerminal">
+        UPDATE net_site
+        SET terminal_sn = #{terminalSn},
+        terminal_key = #{terminalKey}
+        WHERE id = #{id}
+    </update>
+
+    <update id="update" parameterType="com.sinloingok.app.models.net4g.NetSite">
+        UPDATE net_site
+        <set>
+            <if test="name != null">name = #{name},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="baseUnitAmount != null">base_unit_amount = #{baseUnitAmount},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="heartTime != null">heart_time = #{heartTime},</if>
+            <if test="addressId != null">address_id = #{addressId},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <insert id="insertOrUpdateNetSite" parameterType="com.sinloingok.app.models.net4g.NetSite">
+        INSERT INTO net_site (
+        id, name, status, base_time_x, price_y, price_z, prize_pm, prize_sl, money, update_time, address_id
+        )
+        VALUES (
+        #{id}, #{name}, #{status}, #{baseTimeX}, #{priceY}, #{priceZ}, #{prizePm}, #{prizeSl}, #{money}, #{updateTime},
+        #{addressId}
+        )
+        ON DUPLICATE KEY UPDATE
+        <set>
+            <if test="name != null">name = #{name},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="baseUnitAmount != null">base_unit_amount = #{baseUnitAmount},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="addressId != null">address_id = #{addressId},</if>
+        </set>
+    </insert>
+
+    <select id="selectNetSiteStats" resultType="com.sinloingok.app.dtos.NetSiteStatsResDto">
+        SELECT
+            COUNT(*) AS allDeviceCount,
+            SUM(CASE
+                    WHEN status = '在线' AND STR_TO_DATE(heart_time, '%Y-%m-%d %H:%i:%s') >= NOW() - INTERVAL 2 MINUTE THEN 1
+                ELSE 0
+            END) AS onlineDeviceCount,
+            SUM(CASE
+        WHEN (status = '离线' OR (
+        STR_TO_DATE(heart_time, '%Y-%m-%d %H:%i:%s') &lt; NOW() - INTERVAL 2 MINUTE
+        OR heart_time IS NULL) and heart_time != '删除'
+        ) THEN 1
+        ELSE 0
+        END) AS offlineDeviceCount
+        FROM net_site
+    </select>
+
+</mapper>

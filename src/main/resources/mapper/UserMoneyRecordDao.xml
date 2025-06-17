@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.sinloingok.app.dao.UserMoneyRecordDao">
+
+    <!-- SQL片段：时间范围过滤 -->
+    <sql id="TimeRangeWhere">
+        <if test="begin != null and begin != ''">
+            AND umr.create_time &gt;= #{begin}
+        </if>
+        <if test="end != null and end != ''">
+            AND umr.create_time &lt;= #{end}
+        </if>
+    </sql>
+
+    <!-- 查询用户充值记录（分页） -->
+    <select id="selectRechargeRecord" resultType="com.sinloingok.app.dtos.user.RechargeRecordDto">
+        SELECT
+        umr.create_time AS createTime,
+        umr.amount AS amount,
+        umr.`balance_after` - umr.`balance_before` AS money,
+        umr.`ext_money_after` - umr.`ext_money_before` AS awards,
+        umr.`balance_before` AS balanceBefore,
+        umr.`ext_money_before`  AS extMoneyBefore,
+        umr.`pay_code`  AS payCode,
+        umr.type AS TYPE,
+        umr.remark AS remark,
+        ba.addr_name AS addrName
+        FROM fund_transaction umr
+        LEFT JOIN bluetooth_address ba ON umr.address_id = ba.id
+        WHERE umr.user_id = #{userId} AND umr.type IN
+        <foreach collection="types" item="type" open="(" separator="," close=")">
+            #{type}
+        </foreach>
+        ORDER BY umr.create_time DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 用户充值记录总数 -->
+    <select id="countRechargeRecord" resultType="long">
+        SELECT COUNT(*)
+        FROM user_money_record umr
+        WHERE umr.user_id = #{userId} AND umr.type IN
+        <foreach collection="types" item="type" open="(" separator="," close=")">
+            #{type}
+        </foreach>
+    </select>
+
+    <!-- 按订单ID >= 条件获取最近一条记录 -->
+    <select id="selectByOrderIdGte" resultType="com.sinloingok.app.models.user.UserMoneyRecord">
+        SELECT
+        id,
+        user_id AS userId,
+        shop_id AS shopId,
+        address_id AS addressId,
+        remark,
+        order_id AS orderId,
+        money,
+        awards,
+        balance,
+        ext_money AS extMoney,
+        pay_code AS payCode,
+        spread_awards AS spreadAwards,
+        type,
+        recharge_log_id AS rechargeLogId,
+        create_time AS createTime,
+        message
+        FROM user_money_record
+        WHERE order_id &gt;= #{orderId}
+        ORDER BY order_id ASC
+        LIMIT 1
+    </select>
+
+    <!-- 插入一条充值记录 -->
+    <insert id="insertRechargeRecord" parameterType="com.sinloingok.app.models.user.UserMoneyRecord"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO user_money_record (
+            user_id, shop_id, address_id, remark, order_id, money, awards, balance,
+            ext_money, pay_code, spread_awards, type, recharge_log_id, create_time, message
+        ) VALUES (
+            #{userId}, #{shopId}, #{addressId}, #{remark}, #{orderId}, #{money}, #{awards}, #{balance},
+            #{extMoney}, #{payCode}, #{spreadAwards}, #{type}, #{rechargeLogId}, #{createTime}, #{message}
+        )
+    </insert>
+
+    <select id="selectGroupedMoneyStats" resultType="com.sinloingok.app.dtos.user.UserMoneyRecordStatDto">
+        SELECT
+        type,
+        COUNT(*) AS countTotal,
+        SUM(CASE WHEN create_time >= CURDATE() AND create_time &lt; CURDATE() + INTERVAL 1 DAY THEN money ELSE 0 END) AS todayMoney,
+        COUNT(CASE WHEN create_time >= CURDATE() AND create_time &lt; CURDATE() + INTERVAL 1 DAY THEN 1 ELSE NULL END) AS todayCount,
+        SUM(CASE WHEN create_time >= CURDATE() - INTERVAL 1 DAY AND create_time &lt; CURDATE() THEN money ELSE 0 END) AS yesterdayMoney,
+        COUNT(CASE WHEN create_time >= CURDATE() - INTERVAL 1 DAY AND create_time &lt; CURDATE() THEN 1 ELSE NULL END) AS yesterdayCount,
+        SUM(CASE WHEN DATE_FORMAT(create_time, '%Y-%m') = DATE_FORMAT(NOW(), '%Y-%m') THEN money ELSE 0 END) AS monthMoney,
+        COUNT(CASE WHEN DATE_FORMAT(create_time, '%Y-%m') = DATE_FORMAT(NOW(), '%Y-%m') THEN 1 ELSE NULL END) AS monthCount
+        FROM user_money_record
+        GROUP BY type
+    </select>
+
+</mapper>

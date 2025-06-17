@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.sinloingok.app.dao.NetSiteBillRuleDao">
+
+    <!-- 通用结果映射 -->
+    <resultMap id="BillingRuleResultMap" type="com.sinloingok.app.models.net4g.NetSiteBillRule">
+        <id column="id" property="id" />
+        <result column="rule_code" property="ruleCode" />
+        <result column="rule_name" property="ruleName" />
+        <result column="unit_price" property="unitPrice" />
+        <result column="min_bill_duration" property="minBillDuration" />
+        <result column="max_bill_duration" property="maxBillDuration" />
+        <result column="max_price" property="maxPrice" />
+        <result column="address_id" property="addressId" />
+        <result column="channel_no" property="channelNo" />
+        <result column="create_time" property="createTime" />
+        <result column="update_time" property="updateTime" />
+        <result column="is_active" property="isActive" />
+    </resultMap>
+
+    <!-- 根据规则编号查询 -->
+    <select id="selectRuleByCode" parameterType="String" resultMap="BillingRuleResultMap">
+        SELECT
+        id, rule_code, rule_name, unit_price,
+        min_bill_duration, max_bill_duration, max_price,
+        address_id, channel_no, create_time, update_time, is_active
+        FROM net_site_billing_rule
+        WHERE rule_code = #{ruleCode}
+        AND is_active = 1
+    </select>
+
+
+    <!-- 根据规则编号查询 -->
+    <select id="selectRuleByAddress" resultMap="BillingRuleResultMap">
+        SELECT
+        id, rule_code, rule_name, unit_price,
+        min_bill_duration, max_bill_duration, max_price,
+        address_id, channel_no, create_time, update_time, is_active
+        FROM net_site_billing_rule
+        WHERE address_id = #{addressId}
+        AND is_active = 1
+    </select>
+
+    <!-- 检查规则编号是否存在 -->
+    <select id="checkRuleCodeExists" parameterType="String" resultType="int">
+        SELECT COUNT(*) FROM net_site_billing_rule WHERE rule_code = #{ruleCode}
+    </select>
+
+    <!-- 插入或更新计费规则 -->
+    <insert id="insertOrUpdateRule" parameterType="com.sinloingok.app.models.net4g.NetSiteBillRule">
+        INSERT INTO net_site_billing_rule (
+        rule_code, rule_name, unit_price, min_bill_duration,
+        max_bill_duration, max_price, address_id, channel_no, is_active
+        ) VALUES (
+        #{ruleCode}, #{ruleName}, #{unitPrice}, #{minBillDuration},
+        #{maxBillDuration}, #{maxPrice}, #{addressId}, #{channelNo}, #{isActive}
+        )
+        ON DUPLICATE KEY UPDATE
+        rule_name = VALUES(rule_name),
+        unit_price = VALUES(unit_price),
+        min_bill_duration = VALUES(min_bill_duration),
+        max_bill_duration = VALUES(max_bill_duration),
+        max_price = VALUES(max_price),
+        address_id = VALUES(address_id),
+        channel_no = VALUES(channel_no),
+        is_active = VALUES(is_active),
+        update_time = NOW()
+    </insert>
+
+</mapper>

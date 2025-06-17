@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.sinloingok.app.dao.FundUsageRuleDao">
+
+    <resultMap id="BaseResultMap" type="com.sinloingok.app.models.fund.FundUsageRule">
+        <id column="id" property="id" jdbcType="BIGINT"/>
+        <result column="source_address_id" property="sourceAddressId" jdbcType="BIGINT"/>
+        <result column="target_address_id" property="targetAddressId" jdbcType="BIGINT"/>
+        <result column="status" property="status" jdbcType="TINYINT"/>
+        <result column="create_time" property="createTime" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <insert id="saveOrUpdate" parameterType="com.sinloingok.app.models.fund.FundUsageRule">
+        INSERT INTO fund_usage_rule
+        (source_address_id, target_address_id, status)
+        VALUES
+        (#{sourceAddressId}, #{targetAddressId}, #{status})
+        ON DUPLICATE KEY UPDATE
+        status = VALUES(status)
+    </insert>
+
+    <select id="findSourceAddressesForTarget" resultType="java.lang.Long">
+        SELECT source_address_id
+        FROM fund_usage_rule
+        WHERE target_address_id = #{targetAddressId}
+        AND status = 1
+    </select>
+</mapper>

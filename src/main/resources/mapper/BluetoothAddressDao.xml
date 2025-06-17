@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.sinloingok.app.dao.BluetoothAddressDao">
+    <resultMap id="BluetoothAddressMap" type="com.sinloingok.app.models.bluetooth.BluetoothAddress">
+        <id column="id" property="id"/>
+        <result column="user_id" property="userId"/>
+        <result column="addr_name" property="addrName"/>
+        <result column="addr_person_name" property="addrPersonName"/>
+        <result column="addr_person_mobile" property="addrPersonMobile"/>
+        <result column="img" property="img"/>
+        <result column="imges" property="imges"/>
+        <result column="status" property="status"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+        <result column="wx_mchid" property="wxMchid"/>
+        <result column="wxapiv2_private_key" property="wxapiv2PrivateKey"/>
+        <result column="shou_ye" property="shouYe"/>
+        <result column="huo_dong" property="huoDong"/>
+        <result column="chong_zhi" property="chongZhi"/>
+        <result column="new_recharge_day" property="newRechargeDay"/>
+        <result column="new_recharge_money" property="newRechargeMoney"/>
+        <result column="new_recharge_awards" property="newRechargeAwards"/>
+    </resultMap>
+
+    <select id="selectByUserId" resultMap="BluetoothAddressMap">
+        SELECT id, user_id, addr_name, addr_person_name, addr_person_mobile,
+        img, imges, status, create_time, update_time, wx_mchid,
+        wxapiv2_private_key, shou_ye, huo_dong, chong_zhi,
+        new_recharge_day, new_recharge_money, new_recharge_awards
+        FROM bluetooth_address
+        WHERE user_id = #{userId}
+        AND status != '删除'
+    </select>
+
+    <select id="selectByUserIdAndName" resultMap="BluetoothAddressMap">
+        SELECT id, user_id, addr_name, addr_person_name, addr_person_mobile,
+        img, imges, status, create_time, update_time, wx_mchid,
+        wxapiv2_private_key, shou_ye, huo_dong, chong_zhi,
+        new_recharge_day, new_recharge_money, new_recharge_awards
+        FROM bluetooth_address
+        WHERE user_id = #{userId}
+        AND addr_name = #{addrName}
+        AND status != '删除'
+        LIMIT 1
+    </select>
+
+    <select id="selectById" resultMap="BluetoothAddressMap">
+        SELECT id, user_id, addr_name, addr_person_name, addr_person_mobile,
+        img, imges, status, create_time, update_time, wx_mchid,
+        wxapiv2_private_key, shou_ye, huo_dong, chong_zhi,
+        new_recharge_day, new_recharge_money, new_recharge_awards
+        FROM bluetooth_address
+        WHERE id = #{id}
+        LIMIT 1
+    </select>
+
+    <insert id="insert" parameterType="com.sinloingok.app.models.bluetooth.BluetoothAddress" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO bluetooth_address (
+        user_id, addr_name, addr_person_name, addr_person_mobile,
+        img, imges, status, create_time, update_time, wx_mchid,
+        wxapiv2_private_key, shou_ye, huo_dong, chong_zhi,
+        new_recharge_day, new_recharge_money, new_recharge_awards)
+        VALUES (
+        #{userId}, #{addrName}, #{addrPersonName}, #{addrPersonMobile},
+        #{img}, #{imges}, #{status}, #{createTime}, #{updateTime}, #{wxMchid},
+        #{wxapiv2PrivateKey}, #{shouYe}, #{huoDong}, #{chongZhi},
+        #{newRechargeDay}, #{newRechargeMoney}, #{newRechargeAwards})
+    </insert>
+
+    <update id="update" parameterType="com.sinloingok.app.models.bluetooth.BluetoothAddress">
+        UPDATE bluetooth_address
+        <set>
+            <if test="userId != null">user_id = #{userId},</if>
+            <if test="addrName != null">addr_name = #{addrName},</if>
+            <if test="addrPersonName != null">addr_person_name = #{addrPersonName},</if>
+            <if test="addrPersonMobile != null">addr_person_mobile = #{addrPersonMobile},</if>
+            <if test="img != null">img = #{img},</if>
+            <if test="imges != null">imges = #{imges},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="wxMchid != null">wx_mchid = #{wxMchid},</if>
+            <if test="wxapiv2PrivateKey != null">wxapiv2_private_key = #{wxapiv2PrivateKey},</if>
+            <if test="shouYe != null">shou_ye = #{shouYe},</if>
+            <if test="huoDong != null">huo_dong = #{huoDong},</if>
+            <if test="chongZhi != null">chong_zhi = #{chongZhi},</if>
+            <if test="newRechargeDay != null">new_recharge_day = #{newRechargeDay},</if>
+            <if test="newRechargeMoney != null">new_recharge_money = #{newRechargeMoney},</if>
+            <if test="newRechargeAwards != null">new_recharge_awards = #{newRechargeAwards},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateStatus">
+        UPDATE bluetooth_address
+        SET status = #{status}, update_time = #{updateTime}
+        WHERE id = #{id}
+    </update>
+
+    <select id="queryBluetoothAddressList" resultType="com.sinloingok.app.dtos.BluetoothAddressResDto">
+        SELECT id as addressId, addr_name AS name, short_name AS shortName
+        FROM `bluetooth_address`
+        WHERE status = '正常'
+    </select>
+</mapper>
