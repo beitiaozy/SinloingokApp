@@ -1,6 +1,6 @@
 package com.sinloingok.app.service;
 
-import com.sinloingok.app.util.ns.HandlerServer;
+import com.sinloingok.app.util.ns.SignalPayloadUtils;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -10,7 +10,7 @@ public class NetSiteOrderDetailInsertGenerator {
 
     public static void main(String[] args) {
 
-        System.out.println(HandlerServer.convert("01"));
+        System.out.println(SignalPayloadUtils.convert("01"));
 
         // 輸入 orderId
         long orderId = 15216;
