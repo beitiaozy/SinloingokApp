@@ -1,8 +1,8 @@
 package com.sinloingok.app.service.order;
 
 import com.sinloingok.app.models.DeviceControl;
-import com.sinloingok.app.util.ns.HandlerServer;
-import lombok.Getter;
+import com.sinloingok.app.util.ns.NettyChannelRegistry;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
@@ -19,7 +19,10 @@ import java.util.Map;
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class DeviceCommandSender {
+
+    private final NettyChannelRegistry channelRegistry;
 
 
     /** 统一入口：根据动作与通道下发 */
@@ -38,8 +41,7 @@ public class DeviceCommandSender {
             return false;
         }
         try {
-            // 实际发送 —— 若 HandlerServer 有返回值可据此判断是否成功
-            HandlerServer.sendMsg(onlyCode, msg);
+            channelRegistry.sendMsg(onlyCode, msg);
             log.info("下发成功 -> onlyCode={}, action={}, channel={}, raw={}", onlyCode, action, channel, msg);
             return true;
         } catch (Exception e) {
