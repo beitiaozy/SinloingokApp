@@ -45,7 +45,8 @@ public class Main {
                     "                  up    <onlyCode> <ch>       —— 上升沿上传 (文档OH=1)\n" +
                     "                  down  <onlyCode> <ch>       —— 下降沿上传 (文档OL=1)\n" +
                     "                  start <onlyCode> [times]    —— 随机轮番(1,2,4,7,8)，times省略=无限\n" +
-                    "                  stop  <onlyCode>            —— 停止随机轮番\n" +
+                    "                  linear <onlyCode> [loops]  —— 线性测试 QS2→PM→XC→DM→XS→QS1\n" +
+                    "                  stop  <onlyCode>            —— 停止当前测试（轮番/线性）\n" +
                     "                  list                        —— 查看连接与轮番状态\n" +
                     "                  quit                        —— 退出");
             while (true) {
@@ -62,7 +63,8 @@ public class Main {
                     case "list" : map.forEach((k, v) ->
                             System.out.println(k + " -> " +
                                     ((v.channel() != null && v.channel().isActive()) ? "ACTIVE" : "INACTIVE")
-                                    + ", round=" + v.isRoundRunning()));
+                                    + ", round=" + v.isRoundRunning()
+                                    + ", linear=" + v.isLinearRunning()));
                         break;
                     case "open" : {
                         if (t.length < 3) {
@@ -132,6 +134,20 @@ public class Main {
                         }
                         int times = (t.length >= 3) ? Integer.parseInt(t[2]) : 0;
                         c.startRound(times);
+                        break;
+                    }
+                    case "linear" : {
+                        if (t.length < 2) {
+                            System.out.println("用法: linear <onlyCode> [loops]");
+                            break;
+                        }
+                        DeviceClient c = map.get(t[1]);
+                        if (c == null) {
+                            System.out.println("未知 onlyCode");
+                            break;
+                        }
+                        int loops = (t.length >= 3) ? Integer.parseInt(t[2]) : 1;
+                        c.startLinear(loops);
                         break;
                     }
                     case "stop" : {
