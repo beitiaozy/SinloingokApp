@@ -75,13 +75,17 @@ public final class CommandResolver {
                         Command.of(onlyCode, -1, DeviceControl.Action.OVER));
             }
             case 3: { // QS2 → 决策以ch3，控制/结算落 ch8
-                if (!DeviceControl.Action.OPEN.equals(commandStr)) return new DualCommand(null, null);
+//                if (!DeviceControl.Action.OPEN.equals(commandStr)) return new DualCommand(null, null);
+
+//                return new DualCommand(null, null);
                 if(!dc.getChannelStates().get(8).isOpen()) return new DualCommand(null, null);
-                DeviceControl.Action real = dc.getChannelStates().get(3).toggledCommand();
+                //  3號  status open
+                // 清水1 為開始執行
+                log.error("清水2真實狀態{}", commandStr);
                 log.debug("trace={} phase=map step=qs2 ingressCh=3 funcName={} funcCode={} decisionBy=3 ctrlTarget={}:{} settleTarget={}:{} realCmd={}",
-                        MDC.get("trace"), safeName(3), safeCode(3), onlyCode, 8, onlyCode, 8, real);
-                return new DualCommand(Command.of(onlyCode, 8, real),
-                        Command.of(onlyCode, 8, real));
+                        MDC.get("trace"), safeName(3), safeCode(3), onlyCode, 8, onlyCode, 8, commandStr);
+                return new DualCommand(Command.of(onlyCode, 8, commandStr),
+                        Command.of(onlyCode, 8, commandStr));
             }
             case 1: { // PM
                 if (!DeviceControl.Action.OPEN.equals(commandStr)) return new DualCommand(null, null);

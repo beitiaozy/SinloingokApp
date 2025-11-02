@@ -139,6 +139,7 @@ public class HandlerServer extends ChannelInboundHandlerAdapter {
 
     @Override
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+        log.error("[DISCONNECT] Channel inactive: {}", ctx.channel().remoteAddress());
         markDisconnectReasonIfAbsent(ctx.channel(), "channel_inactive");
         super.channelInactive(ctx);
     }

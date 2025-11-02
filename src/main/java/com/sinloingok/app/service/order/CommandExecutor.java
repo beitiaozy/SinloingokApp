@@ -80,6 +80,9 @@ public class CommandExecutor {
                         if (ChannelLockManager.AcquireResult.ACQUIRED.equals(lockResult)) {
                             channelLockManager.release(controlCommand);
                         }
+                        if(chNum == 6){
+                            shouldExecuteSettlement = true;
+                        }
                     }
                 }
             } catch (Exception e) {

@@ -64,13 +64,13 @@ public class NettyServerManager implements NettyServerManagerMBean, ApplicationL
 
     // ======= 新增：可配置的超時/空閒/整形參數 =======
 
-    @Value("${netty.server.idle.read-seconds:30}")     // [新增] 讀空閒秒數，防NAT清表
+    @Value("${netty.server.idle.read-seconds:90}")     // [新增] 讀空閒秒數，防NAT清表
     private int idleReadSeconds;
 
     @Value("${netty.server.idle.write-seconds:10}")    // [新增] 寫空閒秒數，定時發心跳
     private int idleWriteSeconds;
 
-    @Value("${netty.server.timeout.read-seconds:20}")  // [新增] 讀超時，鏈路卡死快失敗
+    @Value("${netty.server.timeout.read-seconds:180}")  // [新增] 讀超時，鏈路卡死快失敗
     private int readTimeoutSeconds;
 
     @Value("${netty.server.timeout.write-seconds:10}") // [新增] 寫超時
