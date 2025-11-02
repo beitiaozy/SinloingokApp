@@ -11,6 +11,7 @@ import java.util.Random;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
 
 public class DeviceClient {
     private final String host;
@@ -20,12 +21,16 @@ public class DeviceClient {
     private volatile Channel channel;
     private final AtomicBoolean roundRunning = new AtomicBoolean(false);
     private final AtomicBoolean linearRunning = new AtomicBoolean(false);
+    private final AtomicBoolean disconnectTestRunning = new AtomicBoolean(false);
     private final Random rnd = new Random();
     private ScheduledFuture<?> roundFuture;
     private ScheduledFuture<?> linearFuture;
     private ScheduledFuture<?> heartbeatFuture;
 
     private DeviceClient pmDeviceClient;
+    private final AtomicBoolean running = new AtomicBoolean(true);
+    private final Object reconnectLock = new Object();
+    private volatile boolean reconnectAllowed = true;
 
     public DeviceClient(String host, int port, String onlyCode) {
         this.host = host;
@@ -45,9 +50,17 @@ public class DeviceClient {
                             channel.pipeline().addLast(new DeviceHandler(DeviceClient.this));
                         }
                     });
-            ChannelFuture f = bs.connect(host, port).sync();
-            this.channel = f.channel();
-            f.channel().closeFuture().sync();
+
+            while (running.get()) {
+                waitForReconnectPermission();
+                if (!running.get()) {
+                    break;
+                }
+                ChannelFuture f = bs.connect(host, port).sync();
+                this.channel = f.channel();
+                f.channel().closeFuture().sync();
+                this.channel = null;
+            }
         } finally {
             stopRound();
             channel = null;
@@ -66,6 +79,65 @@ public class DeviceClient {
 
     public boolean isLinearRunning() {
         return linearRunning.get();
+    }
+
+    /**
+     * 断连测试：保持连接发送一组线性指令 -> 主动断开后再发送一组 -> 恢复连接后立即发送一组。
+     */
+    public void startLinearDisconnectTest() {
+        if (channel == null || !channel.isActive()) {
+            System.out.println(onlyCode + " 未连接");
+            return;
+        }
+        if (roundRunning.get()) {
+            System.out.println(onlyCode + " 正在轮番测试，请先 stop");
+            return;
+        }
+        if (linearRunning.get()) {
+            System.out.println(onlyCode + " 已在执行线性测试，先停止线性测试");
+            return;
+        }
+        if (!disconnectTestRunning.compareAndSet(false, true)) {
+            System.out.println(onlyCode + " 断连测试正在执行");
+            return;
+        }
+
+        new Thread(() -> {
+            try {
+                playLinearSequence("ONLINE");
+
+                pauseReconnect();
+                Channel ch = channel;
+                if (ch != null && ch.isActive()) {
+                    ch.close().syncUninterruptibly();
+                }
+                waitUntil(() -> {
+                    Channel current = channel();
+                    return current == null || !current.isActive();
+                }, 5000L);
+
+                playLinearSequence("OFFLINE");
+
+                resumeReconnect();
+                boolean reconnected = waitUntil(() -> {
+                    Channel current = channel();
+                    return current != null && current.isActive();
+                }, 10000L);
+                if (!reconnected) {
+                    System.out.println(onlyCode + " 断连测试: 重连超时，未继续执行");
+                    return;
+                }
+
+                playLinearSequence("RECONNECTED");
+                System.out.println(onlyCode + " 断连测试完成");
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                System.out.println(onlyCode + " 断连测试被中断: " + e.getMessage());
+            } finally {
+                resumeReconnect();
+                disconnectTestRunning.set(false);
+            }
+        }, onlyCode + "-disc-test").start();
     }
 
     // 兼容服务端 substring(12,14),(14,16) 的开/关帧
@@ -282,6 +354,52 @@ public class DeviceClient {
         if (linearFuture != null) {
             linearFuture.cancel(false);
             linearFuture = null;
+        }
+    }
+
+    /** 以固定节奏发送一次线性测试序列。 */
+    private void playLinearSequence(String stage) throws InterruptedException {
+        final int[] sequence = {3, 1, 7, 5, 2, 8};
+        for (int ch : sequence) {
+            System.out.println(onlyCode + " >>> DISCONNECT_TEST stage=" + stage + " ch=" + ch);
+            sendOpenCompat(ch);
+            Thread.sleep(1000);
+            sendCloseCompat(ch);
+            Thread.sleep(300);
+        }
+    }
+
+    private boolean waitUntil(BooleanSupplier condition, long timeoutMillis) throws InterruptedException {
+        long deadline = System.currentTimeMillis() + timeoutMillis;
+        while (System.currentTimeMillis() < deadline) {
+            if (condition.getAsBoolean()) {
+                return true;
+            }
+            Thread.sleep(100);
+        }
+        return condition.getAsBoolean();
+    }
+
+    private void waitForReconnectPermission() throws InterruptedException {
+        synchronized (reconnectLock) {
+            while (running.get() && !reconnectAllowed) {
+                reconnectLock.wait();
+            }
+        }
+    }
+
+    private void pauseReconnect() {
+        synchronized (reconnectLock) {
+            reconnectAllowed = false;
+        }
+    }
+
+    private void resumeReconnect() {
+        synchronized (reconnectLock) {
+            if (!reconnectAllowed) {
+                reconnectAllowed = true;
+                reconnectLock.notifyAll();
+            }
         }
     }
 
