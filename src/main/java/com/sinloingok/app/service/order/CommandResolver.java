@@ -48,13 +48,13 @@ public final class CommandResolver {
         if (netSite.getPurpose().startsWith("PM")) {
             String siteCode = SignalTopology.tempWscNetSiteMapping(chNum);
             Command settle  = Command.of(siteCode, 1, commandStr);
-            log.info("trace={} phase=map step=pm ingressCh={} funcName={} funcCode={} settleTarget={}:{} cmd={}",
+            log.debug("trace={} phase=map step=pm ingressCh={} funcName={} funcCode={} settleTarget={}:{} cmd={}",
                     MDC.get("trace"), chNum, safeName(chNum), safeCode(chNum), siteCode, 1, commandStr);
             return new DualCommand(null, settle);
         }
 
         if (dc == null) {
-            log.info("trace={} phase=map step=guard msg=dc_not_found onlyCode={}", MDC.get("trace"), onlyCode);
+            log.debug("trace={} phase=map step=guard msg=dc_not_found onlyCode={}", MDC.get("trace"), onlyCode);
             return new DualCommand(null, null);
         }
 
@@ -62,14 +62,14 @@ public final class CommandResolver {
             case 2: case 4: case 5: case 7: case 8: {
                 if (!DeviceControl.Action.OPEN.equals(commandStr)) return new DualCommand(null, null);
                 DeviceControl.Action real = dc.getChannelStates().get(chNum).toggledCommand();
-                log.info("trace={} phase=map step=auto ingressCh={} funcName={} funcCode={} ctrlTarget={}:{} settleTarget={}:{} realCmd={}",
+                log.debug("trace={} phase=map step=auto ingressCh={} funcName={} funcCode={} ctrlTarget={}:{} settleTarget={}:{} realCmd={}",
                         MDC.get("trace"), chNum, safeName(chNum), safeCode(chNum), onlyCode, chNum, onlyCode, chNum, real);
                 return new DualCommand(Command.of(onlyCode, chNum, real),
                         Command.of(onlyCode, chNum, real));
             }
             case 6: { // 关机
                 if (!DeviceControl.Action.CLOSE.equals(commandStr)) return new DualCommand(null, null);
-                log.info("trace={} phase=map step=gj ingressCh=6 funcName={} funcCode={} ctrlTarget={}:{} settle=ALL cmd=CLOSE",
+                log.debug("trace={} phase=map step=gj ingressCh=6 funcName={} funcCode={} ctrlTarget={}:{} settle=ALL cmd=CLOSE",
                         MDC.get("trace"), safeName(6), safeCode(6), onlyCode, 0);
                 return new DualCommand(Command.of(onlyCode, 0, DeviceControl.Action.CLOSE),
                         Command.of(onlyCode, -1, DeviceControl.Action.OVER));
@@ -78,7 +78,7 @@ public final class CommandResolver {
                 if (!DeviceControl.Action.OPEN.equals(commandStr)) return new DualCommand(null, null);
                 if(!dc.getChannelStates().get(8).isOpen()) return new DualCommand(null, null);
                 DeviceControl.Action real = dc.getChannelStates().get(3).toggledCommand();
-                log.info("trace={} phase=map step=qs2 ingressCh=3 funcName={} funcCode={} decisionBy=3 ctrlTarget={}:{} settleTarget={}:{} realCmd={}",
+                log.debug("trace={} phase=map step=qs2 ingressCh=3 funcName={} funcCode={} decisionBy=3 ctrlTarget={}:{} settleTarget={}:{} realCmd={}",
                         MDC.get("trace"), safeName(3), safeCode(3), onlyCode, 8, onlyCode, 8, real);
                 return new DualCommand(Command.of(onlyCode, 8, real),
                         Command.of(onlyCode, 8, real));
@@ -88,7 +88,7 @@ public final class CommandResolver {
                 String pmOnlyCode = SignalTopology.tempPmkzsbOnlyCode();
                 int pmChNum = SignalTopology.tempWscNetSitePmChNum(onlyCode);
                 DeviceControl.Action real = dc.getChannelStates().get(1).toggledCommand();
-                log.info("trace={} phase=map step=pm_local ingressCh=1 funcName={} funcCode={} ctrlTarget={}:{} settleTarget={}:{} ctrlCmd={} settleCmd={}",
+                log.debug("trace={} phase=map step=pm_local ingressCh=1 funcName={} funcCode={} ctrlTarget={}:{} settleTarget={}:{} ctrlCmd={} settleCmd={}",
                         MDC.get("trace"), safeName(1), safeCode(1), pmOnlyCode, pmChNum, onlyCode, 1, commandStr, real);
                 return new DualCommand(Command.of(pmOnlyCode, pmChNum, commandStr),
                         Command.of(onlyCode, 1, real));
