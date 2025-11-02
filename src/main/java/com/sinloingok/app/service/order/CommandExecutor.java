@@ -37,78 +37,87 @@ public class CommandExecutor {
         long tExec0 = System.nanoTime();
         CommandResolver.DualCommand pair = CommandResolver.resolve(onlyCode, chNum, commandStr);
 
-        // 1) 控制：有 control 才执行
-        if (pair.getControl() != null) {
-            Command c = pair.getControl();
+        Command controlCommand = pair.getControl();
+        Command settleCommand = pair.getSettle();
+
+        logExecutionPlan(onlyCode, chNum, commandStr, controlCommand, settleCommand);
+
+        StepOutcome controlOutcome = StepOutcome.SKIPPED;
+        String controlDetail = controlCommand == null ? "no_control" : describeCommand(controlCommand);
+        ChannelLockManager.AcquireResult lockResult = ChannelLockManager.AcquireResult.NOT_REQUIRED;
+        boolean shouldExecuteSettlement = true;
+
+        if (controlCommand != null) {
             long tCtrl0 = System.nanoTime();
             try {
-                ChannelLockManager.AcquireResult lockResult = channelLockManager.acquire(c);
+                lockResult = channelLockManager.acquire(controlCommand);
                 if (ChannelLockManager.AcquireResult.BUSY.equals(lockResult)) {
-                    log.info("trace={} phase=control step=skip reason=channel_locked target={}:{} cmd={}",
-                            MDC.get("trace"), c.getOnlyCode(), c.getChannel(), c.getCommand());
-                    return false;
-                }
-
-                boolean ok = sendCommand(c);
-                long costMs = (System.nanoTime() - tCtrl0) / 1_000_000;
-                log.info("trace={} phase=control step=send target={}:{} cmd={} result={} costMs={}",
-                        MDC.get("trace"), c.getOnlyCode(), c.getChannel(), c.getCommand(), ok ? "OK" : "FAIL", costMs);
-                if (!ok) {
-                    if (ChannelLockManager.AcquireResult.ACQUIRED.equals(lockResult)) {
-                        channelLockManager.release(c);
-                    }
-                    return false;
-                }
-
-                // ★ 仅在控制成功后更新状态（本机或 PMKZSB 目标）
-                DeviceControl dc = NetSiteCache.wscDeviceControl(onlyCode);
-                if (dc != null && c.getOnlyCode().equals(onlyCode)) {
-                    if (chNum == 3) {
-                        dc.updateState(3, c.getCommand());
-                        log.info("trace={} phase=state step=update sourceCh=3 writeCh=3 newState={}",
-                                MDC.get("trace"), c.getCommand());
-                    } else if (chNum == 8) {
-                        dc.updateState(8, c.getCommand());
-                        dc.updateState(3, c.getCommand());
-                        log.info("trace={} phase=state step=update sourceCh=8 writeCh=8,3 mirror=true newState={}",
-                                MDC.get("trace"), c.getCommand());
+                    controlOutcome = StepOutcome.FAILED;
+                    controlDetail = "channel_locked";
+                    shouldExecuteSettlement = false;
+                } else {
+                    boolean ok = sendCommand(controlCommand);
+                    long costMs = (System.nanoTime() - tCtrl0) / 1_000_000;
+                    log.debug("trace={} phase=control step=send target={}:{} cmd={} result={} costMs={}",
+                            MDC.get("trace"), controlCommand.getOnlyCode(), controlCommand.getChannel(),
+                            controlCommand.getCommand(), ok ? "OK" : "FAIL", costMs);
+                    if (ok) {
+                        updateLocalState(onlyCode, chNum, controlCommand);
+                        controlOutcome = StepOutcome.SUCCESS;
+                        controlDetail = formatSuccessDetail(controlCommand, costMs);
                     } else {
-                        dc.updateState(c.getChannel(), c.getCommand());
-                        log.info("trace={} phase=state step=update sourceCh={} writeCh={} newState={}",
-                                MDC.get("trace"), chNum, c.getChannel(), c.getCommand());
+                        controlOutcome = StepOutcome.FAILED;
+                        controlDetail = "send_failed";
+                        shouldExecuteSettlement = false;
+                        if (ChannelLockManager.AcquireResult.ACQUIRED.equals(lockResult)) {
+                            channelLockManager.release(controlCommand);
+                        }
                     }
-                    NetSiteCache.refreshDeviceControl(onlyCode, dc);
                 }
             } catch (Exception e) {
+                controlOutcome = StepOutcome.FAILED;
+                controlDetail = "exception:" + e.getMessage();
+                shouldExecuteSettlement = false;
                 log.error("trace={} phase=control step=exception", MDC.get("trace"), e);
-                return false;
+                if (ChannelLockManager.AcquireResult.ACQUIRED.equals(lockResult)) {
+                    channelLockManager.release(controlCommand);
+                }
             }
         }
 
-        // 2) 结算：有 settle 才执行
-        if (pair.getSettle() != null) {
-            Command s = pair.getSettle();
+        SettlementService.SettlementResult settlementResult = SettlementService.SettlementResult.skipped("no_settle");
+        if (shouldExecuteSettlement && settleCommand != null) {
             long tSet0 = System.nanoTime();
             try {
-                if (s.getChannel() == -1 &&  DeviceControl.Action.OVER.equals(s.getCommand())) {
-                    log.info("trace={} phase=settle step=start type=ALL", MDC.get("trace"));
-                    settlementService.settleAll(s.getOnlyCode());
+                if (settleCommand.getChannel() == -1 && DeviceControl.Action.OVER.equals(settleCommand.getCommand())) {
+                    settlementResult = settlementService.settleAll(settleCommand.getOnlyCode());
                 } else {
-                    log.info("trace={} phase=settle step=start type=CHANNEL targetCh={} cmd={}",
-                            MDC.get("trace"), s.getChannel(), s.getCommand());
-                    settlementService.settleChannel(s.getOnlyCode(), s.getChannel(), s.getCommand());
+                    settlementResult = settlementService.settleChannel(
+                            settleCommand.getOnlyCode(), settleCommand.getChannel(), settleCommand.getCommand());
                 }
-                long costMs = (System.nanoTime() - tSet0) / 1_000_000;
-                log.info("trace={} phase=settle step=done costMs={}", MDC.get("trace"), costMs);
+                if (settlementResult.isExecuted() && settlementResult.getCostMs() == 0L) {
+                    long costMs = (System.nanoTime() - tSet0) / 1_000_000;
+                    settlementResult = SettlementService.SettlementResult.success(settlementResult.getDetail(), costMs);
+                }
             } catch (Exception e) {
                 log.error("trace={} phase=settle step=exception", MDC.get("trace"), e);
-                return false;
+                settlementResult = SettlementService.SettlementResult.failed("exception:" + e.getMessage(),
+                        (System.nanoTime() - tSet0) / 1_000_000);
             }
+        } else if (!shouldExecuteSettlement && settleCommand != null) {
+            settlementResult = SettlementService.SettlementResult.skipped("control_failed");
         }
 
         long execMs = (System.nanoTime() - tExec0) / 1_000_000;
-        log.info("trace={} phase=executor step=finish result=OK costMs={}", MDC.get("trace"), execMs);
-        return true;
+        boolean overallSuccess = StepOutcome.SUCCESS.equals(controlOutcome) || controlCommand == null;
+        if (settleCommand != null) {
+            overallSuccess = overallSuccess && settlementResult.isSuccess();
+        }
+
+        logExecutionSummary(onlyCode, chNum, commandStr, controlCommand, controlOutcome, controlDetail,
+                settleCommand, settlementResult, execMs);
+
+        return overallSuccess;
     }
 
     private boolean sendCommand(Command command){
@@ -132,14 +141,150 @@ public class CommandExecutor {
     public void turnOnAirCompressorPower() {
         deviceSender.open(kyOnlyCode, 1);
         airCompressorOff = false;
-        log.info("trace={} phase=ky step=on", MDC.get("trace"));
+        log.debug("trace={} phase=ky step=on", MDC.get("trace"));
     }
 
     public void turnOffAirCompressPower() {
         if (!airCompressorOff) {
-            log.info("trace={} phase=ky step=off", MDC.get("trace"));
+            log.debug("trace={} phase=ky step=off", MDC.get("trace"));
             deviceSender.close(kyOnlyCode, 1);
             airCompressorOff = true;
         }
+    }
+
+    private void logExecutionPlan(String onlyCode, int chNum, DeviceControl.Action commandStr,
+                                  Command controlCommand, Command settleCommand) {
+        String funcCode = chNum > 0 ? safeFuncCode(chNum) : "NA";
+        String funcName = chNum > 0 ? safeFuncName(chNum) : describeChannel(chNum);
+        log.info("trace={} 指令開始 -> 設備={} 通道={}({}) 功能={} 動作={}({}) 控制={} 結算={}",
+                MDC.get("trace"), onlyCode, chNum, funcCode, funcName, commandStr,
+                actionMeaning(commandStr),
+                controlCommand == null ? "無" : describeCommand(controlCommand),
+                settleCommand == null ? "無" : describeCommand(settleCommand));
+    }
+
+    private void logExecutionSummary(String onlyCode, int chNum, DeviceControl.Action originalCommand,
+                                     Command controlCommand, StepOutcome controlOutcome, String controlDetail,
+                                     Command settleCommand, SettlementService.SettlementResult settlementResult,
+                                     long execCostMs) {
+        String controlSummary;
+        if (controlCommand == null) {
+            controlSummary = "無控制";
+        } else {
+            controlSummary = String.format("%s(%s)", controlOutcome.getLabel(), controlDetail);
+        }
+
+        String settleSummary;
+        if (settleCommand == null) {
+            settleSummary = "無計費";
+        } else if (settlementResult.isExecuted()) {
+            settleSummary = String.format("%s(%s, cost=%dms)",
+                    settlementResult.isSuccess() ? "成功" : "失敗", settlementResult.getDetail(),
+                    settlementResult.getCostMs());
+        } else {
+            settleSummary = String.format("跳過(%s)", settlementResult.getDetail());
+        }
+
+        log.info("trace={} 指令完成 -> 設備={} 通道={} 動作={}({}) 控制結果={} 計費結果={} 耗時={}ms",
+                MDC.get("trace"), onlyCode, chNum, originalCommand, actionMeaning(originalCommand),
+                controlSummary, settleSummary, execCostMs);
+    }
+
+    private enum StepOutcome {
+        SUCCESS("成功"),
+        FAILED("失敗"),
+        SKIPPED("跳過");
+
+        private final String label;
+
+        StepOutcome(String label) {
+            this.label = label;
+        }
+
+        public String getLabel() {
+            return label;
+        }
+    }
+
+    private void updateLocalState(String onlyCode, int sourceChannel, Command controlCommand) {
+        DeviceControl dc = NetSiteCache.wscDeviceControl(onlyCode);
+        if (dc == null || !controlCommand.getOnlyCode().equals(onlyCode)) {
+            return;
+        }
+
+        if (sourceChannel == 3) {
+            dc.updateState(3, controlCommand.getCommand());
+            log.debug("trace={} phase=state step=update sourceCh=3 writeCh=3 newState={}",
+                    MDC.get("trace"), controlCommand.getCommand());
+        } else if (sourceChannel == 8) {
+            dc.updateState(8, controlCommand.getCommand());
+            dc.updateState(3, controlCommand.getCommand());
+            log.debug("trace={} phase=state step=update sourceCh=8 writeCh=8,3 mirror=true newState={}",
+                    MDC.get("trace"), controlCommand.getCommand());
+        } else {
+            dc.updateState(controlCommand.getChannel(), controlCommand.getCommand());
+            log.debug("trace={} phase=state step=update sourceCh={} writeCh={} newState={}",
+                    MDC.get("trace"), sourceChannel, controlCommand.getChannel(), controlCommand.getCommand());
+        }
+        NetSiteCache.refreshDeviceControl(onlyCode, dc);
+    }
+
+    private String describeCommand(Command command) {
+        String channelDesc = describeChannel(command.getChannel());
+        return String.format("%s:%s %s(%s) %s", command.getOnlyCode(), channelDesc,
+                safeFuncName(command.getChannel()), safeFuncCode(command.getChannel()),
+                actionMeaning(command.getCommand()));
+    }
+
+    private String describeChannel(int channel) {
+        if (channel == -1) {
+            return "ALL";
+        }
+        if (channel == 0) {
+            return "GLOBAL";
+        }
+        return String.valueOf(channel);
+    }
+
+    private String safeFuncName(int channel) {
+        if (channel <= 0) {
+            return channel == 0 ? "總控" : "全部";
+        }
+        try {
+            return SignalTopology.getFunctionName(channel);
+        } catch (Exception e) {
+            return "CH" + channel;
+        }
+    }
+
+    private String safeFuncCode(int channel) {
+        if (channel <= 0) {
+            return channel == 0 ? "CTRL" : "ALL";
+        }
+        try {
+            return SignalTopology.getFunctionCode(channel);
+        } catch (Exception e) {
+            return "CH" + channel;
+        }
+    }
+
+    private String actionMeaning(DeviceControl.Action action) {
+        switch (action) {
+            case OPEN:
+                return "開啟";
+            case CLOSE:
+                return "關閉";
+            case OVER:
+                return "結束";
+            case READ:
+                return "讀取";
+            default:
+                return action.name();
+        }
+    }
+
+    private String formatSuccessDetail(Command command, long costMs) {
+        return String.format("target=%s:%s %s cost=%dms", command.getOnlyCode(), describeChannel(command.getChannel()),
+                safeFuncName(command.getChannel()), costMs);
     }
 }
