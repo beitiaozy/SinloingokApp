@@ -16,6 +16,7 @@ public class CommandExecutor {
 
     private final DeviceCommandSender deviceSender;       // 硬件下发
     private final SettlementService settlementService;    // 结算
+    private final ChannelLockManager channelLockManager;  // 通道锁
 
     /** 供 HandlerServer 传入现成 traceId 的入口 */
     public boolean executeWithTrace(String onlyCode, int chNum, DeviceControl.Action commandStr, String traceId) {
@@ -41,11 +42,23 @@ public class CommandExecutor {
             Command c = pair.getControl();
             long tCtrl0 = System.nanoTime();
             try {
+                ChannelLockManager.AcquireResult lockResult = channelLockManager.acquire(c);
+                if (ChannelLockManager.AcquireResult.BUSY.equals(lockResult)) {
+                    log.info("trace={} phase=control step=skip reason=channel_locked target={}:{} cmd={}",
+                            MDC.get("trace"), c.getOnlyCode(), c.getChannel(), c.getCommand());
+                    return false;
+                }
+
                 boolean ok = sendCommand(c);
                 long costMs = (System.nanoTime() - tCtrl0) / 1_000_000;
                 log.info("trace={} phase=control step=send target={}:{} cmd={} result={} costMs={}",
                         MDC.get("trace"), c.getOnlyCode(), c.getChannel(), c.getCommand(), ok ? "OK" : "FAIL", costMs);
-                if (!ok) return false;
+                if (!ok) {
+                    if (ChannelLockManager.AcquireResult.ACQUIRED.equals(lockResult)) {
+                        channelLockManager.release(c);
+                    }
+                    return false;
+                }
 
                 // ★ 仅在控制成功后更新状态（本机或 PMKZSB 目标）
                 DeviceControl dc = NetSiteCache.wscDeviceControl(onlyCode);
