@@ -2,6 +2,7 @@ package com.sinloingok.app.util.ns;
 
 import com.sinloingok.app.config.SBeanUtils;
 import com.sinloingok.app.service.netsite.NetSiteService;
+import com.sinloingok.app.service.order.ChannelLockManager;
 import com.sinloingok.app.service.order.CommandExecutor;
 import com.sinloingok.app.util.StringValidationUtil;
 import io.netty.buffer.ByteBuf;
@@ -36,6 +37,7 @@ public class HandlerServer extends ChannelInboundHandlerAdapter {
     private final NettyChannelRegistry channelRegistry;
     private final HeartbeatProcessor heartbeatProcessor;
     private final PulseSignalProcessor pulseSignalProcessor;
+    private final ChannelLockManager channelLockManager;
 
     private volatile NetSiteService netSiteService;
     private volatile CommandExecutor executor;
@@ -83,6 +85,9 @@ public class HandlerServer extends ChannelInboundHandlerAdapter {
     private void processRelayFeedback(ChannelHandlerContext ctx, String hexData) {
         String onlyCode = channelRegistry.getOnlyCode(ctx.channel());
         log.info("trace={} phase=relay step=feedback onlyCode={} hexData={}", MDC.get("trace"), onlyCode, hexData);
+        if (onlyCode != null) {
+            channelLockManager.onRelayFeedback(onlyCode);
+        }
     }
 
     @Override
