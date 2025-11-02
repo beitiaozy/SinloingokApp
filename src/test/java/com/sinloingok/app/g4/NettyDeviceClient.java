@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.List;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.Locale;
 
 /**
  * 模擬終端設備連接
@@ -57,12 +58,15 @@ public class NettyDeviceClient {
                          }
 
                          @Override
-                         protected void channelRead0(ChannelHandlerContext ctx, ByteBuf msg) {
-                             byte[] data = new byte[msg.readableBytes()];
-                             msg.readBytes(data);
-                             log.info("设备 {} 收到数据: {}", onlyCode, bytesToHex(data));
-                             ctx.writeAndFlush(Unpooled.wrappedBuffer(hexString2Bytes("4f4b21")));
-                         }
+                        protected void channelRead0(ChannelHandlerContext ctx, ByteBuf msg) {
+                            byte[] data = new byte[msg.readableBytes()];
+                            msg.readBytes(data);
+                            String hexPayload = bytesToHex(data);
+                            log.info("设备 {} 收到数据: {}", onlyCode, hexPayload);
+                            if (shouldAck(hexPayload)) {
+                                ctx.writeAndFlush(Unpooled.wrappedBuffer(hexString2Bytes("4f4b21")));
+                            }
+                        }
 
                          @Override
                          public void channelInactive(ChannelHandlerContext ctx) {
@@ -105,6 +109,11 @@ public class NettyDeviceClient {
             sb.append(String.format("%02X", b));
         }
         return sb.toString();
+    }
+
+    private static boolean shouldAck(String hexPayload) {
+        String upper = hexPayload.toUpperCase(Locale.ROOT);
+        return !upper.startsWith("A50012594A") && !upper.equals("504F4E47");
     }
 
     public static void main(String[] args) throws Exception {
