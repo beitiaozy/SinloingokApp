@@ -10,11 +10,13 @@ public class SwitchProtoCompat {
 
     // 开：begin=2^(n-1), end=00
     public static String buildOpen(int channel) {
+        channel = 9 - channel;
         return buildRaw(ch2(channel), "00");
     }
 
     // 关：begin=00, end=2^(n-1)
     public static String buildClose(int channel) {
+        channel = 9 - channel;
         return buildRaw("00", ch2(channel));
     }
 

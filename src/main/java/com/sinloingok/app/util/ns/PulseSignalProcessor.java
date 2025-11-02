@@ -61,7 +61,7 @@ public class PulseSignalProcessor {
         String funcCode = channelNo > 0 ? SignalTopology.getFunctionCode(channelNo) : "NA";
         String funcName = channelNo > 0 ? SignalTopology.getFunctionName(channelNo) : "NA";
 
-        String traceId = Trace.newId();
+        String traceId = Trace.newId(onlyCode);
         Trace.bind(traceId, onlyCode, channelNo, action.name(), funcCode, funcName);
 
         try {

@@ -188,7 +188,10 @@ public class DeviceClient {
             // 安全：全关（1..8），避免残留上一次状态
             for (int ch = 1; ch <= 8; ch++) {
                 sendCloseCompat(ch);
-                try { Thread.sleep(30); } catch (InterruptedException ignored) {}
+                try {
+                    Thread.sleep(30);
+                } catch (InterruptedException ignored) {
+                }
             }
         }
     }
@@ -271,7 +274,10 @@ public class DeviceClient {
                 // 2) 逐个触发（用 sendOpenCompat 表示“动作”，不区分语义）
                 for (int ch : picks) {
                     sendOpenCompat(ch);
-                    try { Thread.sleep(50 + rnd.nextInt(151)); } catch (InterruptedException ignored) {}
+                    try {
+                        Thread.sleep(50 + rnd.nextInt(151));
+                    } catch (InterruptedException ignored) {
+                    }
                 }
 
                 // 3) 穿插 PM 设备（0~2 次），短促触发 PMKZSB 相应通道
@@ -280,7 +286,10 @@ public class DeviceClient {
                     for (int i = 0; i < pmTimes; i++) {
                         int pmCh = SignalTopology.tempWscNetSitePmChNum(onlyCode); // PMKZSB.ch(siteNo)
                         pmDeviceClient.sendOpenCompat(pmCh);
-                        try { Thread.sleep(200 + rnd.nextInt(601)); } catch (InterruptedException ignored) {}
+                        try {
+                            Thread.sleep(200 + rnd.nextInt(601));
+                        } catch (InterruptedException ignored) {
+                        }
                     }
                 }
 
@@ -301,7 +310,7 @@ public class DeviceClient {
     }
 
     private void runLinear(int loops) {
-        final int[] sequence = {3, 1, 7, 5, 2, 8};
+        final int[] sequence = {8, 8, 3, 3, 8, 3, 3, 8, 2, 4, 5, 7, 8, 2, 4, 5, 7, 8};
         final EventLoop loop = channel.eventLoop();
 
         Runnable task = new Runnable() {
@@ -403,19 +412,25 @@ public class DeviceClient {
         }
     }
 
-    /** 从池中随机挑选 count 个元素并随机打乱顺序 */
+    /**
+     * 从池中随机挑选 count 个元素并随机打乱顺序
+     */
     private int[] randomPickAndShuffle(int[] pool, int count) {
         int[] copy = pool.clone();
         for (int i = copy.length - 1; i > 0; i--) {
             int j = rnd.nextInt(i + 1);
-            int t = copy[i]; copy[i] = copy[j]; copy[j] = t;
+            int t = copy[i];
+            copy[i] = copy[j];
+            copy[j] = t;
         }
         if (count >= copy.length) return copy;
         int[] out = new int[count];
         System.arraycopy(copy, 0, out, 0, count);
         for (int i = out.length - 1; i > 0; i--) {
             int j = rnd.nextInt(i + 1);
-            int t = out[i]; out[i] = out[j]; out[j] = t;
+            int t = out[i];
+            out[i] = out[j];
+            out[j] = t;
         }
         return out;
     }

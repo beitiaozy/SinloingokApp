@@ -14,7 +14,7 @@ import static org.junit.Assert.*;
 
 public class CommandResolverTest {
 
-    private static final String ONLY_CODE = "TEST-ONLY-CODE";
+    private static final String ONLY_CODE = "0090D500245B";
 
     private DeviceControl deviceControl;
 
