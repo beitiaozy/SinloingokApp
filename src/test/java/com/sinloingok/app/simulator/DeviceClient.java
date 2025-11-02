@@ -7,6 +7,8 @@ import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -14,6 +16,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
 
 public class DeviceClient {
+    private static final long MIN_CHANNEL_INTERVAL_MILLIS = 3000L;
     private final String host;
     private final int port;
     private final String onlyCode;
@@ -104,7 +107,7 @@ public class DeviceClient {
 
         new Thread(() -> {
             try {
-                playLinearSequence("ONLINE");
+                playLinearSequence("ONLINE", 2, true);
 
                 pauseReconnect();
                 Channel ch = channel;
@@ -116,7 +119,7 @@ public class DeviceClient {
                     return current == null || !current.isActive();
                 }, 5000L);
 
-                playLinearSequence("OFFLINE");
+                playLinearSequence("OFFLINE", 1, false);
 
                 resumeReconnect();
                 boolean reconnected = waitUntil(() -> {
@@ -128,7 +131,7 @@ public class DeviceClient {
                     return;
                 }
 
-                playLinearSequence("RECONNECTED");
+                playLinearSequence("RECONNECTED", 2, true);
                 System.out.println(onlyCode + " 断连测试完成");
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -366,15 +369,60 @@ public class DeviceClient {
         }
     }
 
-    /** 以固定节奏发送一次线性测试序列。 */
-    private void playLinearSequence(String stage) throws InterruptedException {
-        final int[] sequence = {3, 1, 7, 5, 2, 8};
-        for (int ch : sequence) {
-            System.out.println(onlyCode + " >>> DISCONNECT_TEST stage=" + stage + " ch=" + ch);
-            sendOpenCompat(ch);
-            Thread.sleep(1000);
-            sendCloseCompat(ch);
-            Thread.sleep(300);
+    /** 按线性测试节奏执行断连测试阶段。 */
+    private void playLinearSequence(String stage, int loops, boolean allowClose) throws InterruptedException {
+        final int[] sequence = {8, 8, 3, 3, 8, 3, 3, 8, 2, 4, 5, 7, 8, 2, 4, 5, 7, 8};
+        if (loops <= 0) {
+            loops = 1;
+        }
+
+        Map<Integer, Long> lastOpenAt = new HashMap<>();
+
+        for (int loopIndex = 1; loopIndex <= loops; loopIndex++) {
+            for (int chNum : sequence) {
+                enforceMinChannelInterval(lastOpenAt, chNum);
+
+                int holdSeconds = 5 + rnd.nextInt(11); // 5~15 秒
+                long holdMillis = holdSeconds * 1000L;
+                String funcCode = SignalTopology.getFunctionCode(chNum);
+                String funcName = SignalTopology.getFunctionName(chNum);
+                System.out.println(onlyCode + " >>> DISCONNECT_TEST stage=" + stage
+                        + " loop=" + loopIndex + "/" + loops
+                        + " ch=" + chNum
+                        + " function=" + funcCode
+                        + (funcName != null ? "(" + funcName + ")" : "")
+                        + " duration=" + holdSeconds + "s"
+                        + (allowClose ? "" : " (OPEN only)"));
+
+                sendOpenCompat(chNum);
+                lastOpenAt.put(chNum, System.currentTimeMillis());
+
+                if (allowClose) {
+                    long closeDelay = Math.max(1000L, holdMillis - 500L);
+                    Thread.sleep(closeDelay);
+                    if (channel != null && channel.isActive()) {
+                        sendCloseCompat(chNum);
+                    } else {
+                        System.out.println(onlyCode + " >>> DISCONNECT_TEST stage=" + stage
+                                + " ch=" + chNum + " close skipped (channel inactive)");
+                    }
+                    long remainder = Math.max(0L, (holdMillis + 500L) - closeDelay);
+                    Thread.sleep(remainder);
+                } else {
+                    Thread.sleep(holdMillis + 500L);
+                }
+            }
+        }
+    }
+
+    private void enforceMinChannelInterval(Map<Integer, Long> lastOpenAt, int chNum) throws InterruptedException {
+        Long lastTime = lastOpenAt.get(chNum);
+        if (lastTime == null) {
+            return;
+        }
+        long elapsed = System.currentTimeMillis() - lastTime;
+        if (elapsed < MIN_CHANNEL_INTERVAL_MILLIS) {
+            Thread.sleep(MIN_CHANNEL_INTERVAL_MILLIS - elapsed);
         }
     }
 
