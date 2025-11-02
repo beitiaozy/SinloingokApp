@@ -26,34 +26,89 @@ public class DeviceCommandSender {
 
 
     /** 统一入口：根据动作与通道下发 */
-    public boolean send(String onlyCode, int channel, DeviceControl.Action action) {
+    public SendResult send(String onlyCode, int channel, DeviceControl.Action action) {
         if (StringUtils.isBlank(onlyCode)) {
             log.warn("发送失败：onlyCode 为空, action={}, channel={}", action, channel);
-            return false;
+            return SendResult.failure(SendStatus.VALIDATION_FAILED, "onlyCode_blank");
         }
         if (channel < 0 || channel > 16) {
             log.warn("发送失败：非法通道 channel={}, 允许范围 0..16（0=全局）", channel);
-            return false;
+            return SendResult.failure(SendStatus.VALIDATION_FAILED, "channel_out_of_range");
         }
         final String msg = resolveCommand(action, channel);
         if (msg == null) {
             log.warn("发送失败：未配置的命令 action={}, channel={}", action, channel);
-            return false;
+            return SendResult.failure(SendStatus.VALIDATION_FAILED, "command_not_configured");
         }
         try {
-            channelRegistry.sendMsg(onlyCode, msg);
-            log.info("下发成功 -> onlyCode={}, action={}, channel={}, raw={}", onlyCode, action, channel, msg);
-            return true;
+            String sendResult = channelRegistry.sendMsg(onlyCode, msg);
+            if ("success".equalsIgnoreCase(sendResult)) {
+                log.info("下发成功 -> onlyCode={}, action={}, channel={}, raw={}", onlyCode, action, channel, msg);
+                return SendResult.success();
+            }
+            if ("not_found".equalsIgnoreCase(sendResult)) {
+                log.warn("下发失败（通道缺失）-> onlyCode={} action={} channel={} raw={}", onlyCode, action, channel, msg);
+                return SendResult.failure(SendStatus.NOT_FOUND, "channel_not_found");
+            }
+            if ("error".equalsIgnoreCase(sendResult)) {
+                log.error("下发失败（写入异常）-> onlyCode={} action={} channel={} raw={}", onlyCode, action, channel, msg);
+                return SendResult.failure(SendStatus.ERROR, "channel_write_error");
+            }
+            log.warn("下发失败（未知返回）-> onlyCode={} action={} channel={} raw={} result={}",
+                    onlyCode, action, channel, msg, sendResult);
+            return SendResult.failure(SendStatus.UNKNOWN, "unknown_result:" + sendResult);
         } catch (Exception e) {
             log.error("下发异常 -> onlyCode={}, action={}, channel={}, raw={}", onlyCode, action, channel, msg, e);
-            return false;
+            return SendResult.failure(SendStatus.ERROR, e.getClass().getSimpleName());
         }
     }
 
     /** 便捷方法 */
-    public boolean open(String onlyCode, int channel)  { return send(onlyCode, channel, DeviceControl.Action.OPEN); }
-    public boolean close(String onlyCode, int channel) { return send(onlyCode, channel, DeviceControl.Action.CLOSE); }
-    public boolean readAll(String onlyCode)            { return send(onlyCode, 0,       DeviceControl.Action.READ);  }
+    public SendResult open(String onlyCode, int channel)  { return send(onlyCode, channel, DeviceControl.Action.OPEN); }
+    public SendResult close(String onlyCode, int channel) { return send(onlyCode, channel, DeviceControl.Action.CLOSE); }
+    public SendResult readAll(String onlyCode)            { return send(onlyCode, 0,       DeviceControl.Action.READ);  }
+
+    public enum SendStatus {
+        SUCCESS,
+        VALIDATION_FAILED,
+        NOT_FOUND,
+        ERROR,
+        UNKNOWN
+    }
+
+    public static final class SendResult {
+        private final SendStatus status;
+        private final String detail;
+
+        private SendResult(SendStatus status, String detail) {
+            this.status = status;
+            this.detail = detail;
+        }
+
+        public static SendResult success() {
+            return new SendResult(SendStatus.SUCCESS, "OK");
+        }
+
+        public static SendResult failure(SendStatus status, String detail) {
+            return new SendResult(status, detail);
+        }
+
+        public boolean isSuccess() {
+            return SendStatus.SUCCESS.equals(status);
+        }
+
+        public boolean isOffline() {
+            return SendStatus.NOT_FOUND.equals(status);
+        }
+
+        public SendStatus getStatus() {
+            return status;
+        }
+
+        public String getDetail() {
+            return detail;
+        }
+    }
 
     /** 通过动作与通道解析指令原文（不可变 Map，线程安全） */
     private String resolveCommand(DeviceControl.Action action, int channel) {

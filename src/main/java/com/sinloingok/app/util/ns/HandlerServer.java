@@ -14,6 +14,7 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.handler.timeout.IdleState;
 import io.netty.handler.timeout.IdleStateEvent;
+import io.netty.util.AttributeKey;
 import io.netty.util.ReferenceCountUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +32,8 @@ public class HandlerServer extends ChannelInboundHandlerAdapter {
     private static final String SWITCH_SIGNAL_PREFIX = "eeffc001";
     private static final String HEARTBEAT_PREFIX     = "a50012594a";
     private static final String RELAY_FEEDBACK       = "4f4b21";
+
+    private static final AttributeKey<String> DISCONNECT_REASON = AttributeKey.valueOf("disconnectReason");
 
     private static final byte[] PONG_BYTES = "PONG".getBytes(StandardCharsets.US_ASCII);
 
@@ -98,7 +101,9 @@ public class HandlerServer extends ChannelInboundHandlerAdapter {
                 safeWriteAndFlush(ctx, Unpooled.wrappedBuffer(PONG_BYTES));
                 log.debug("trace={} phase=idle step=writer_idle pong_to={}", MDC.get("trace"), ctx.channel().remoteAddress());
             } else if (e.state() == IdleState.READER_IDLE) {
-                log.warn("trace={} phase=idle step=reader_idle close={}", MDC.get("trace"), ctx.channel().remoteAddress());
+                log.warn("trace={} phase=idle step=reader_idle close={} reason=heartbeat_timeout",
+                        MDC.get("trace"), ctx.channel().remoteAddress());
+                markDisconnectReason(ctx.channel(), "heartbeat_timeout");
                 ctx.close();
             }
         } else {
@@ -120,25 +125,48 @@ public class HandlerServer extends ChannelInboundHandlerAdapter {
     @Override
     public void handlerRemoved(ChannelHandlerContext ctx) {
         log.info("trace={} phase=netty step=handler_removed channelId={}", MDC.get("trace"), ctx.channel().id().asLongText());
+        markDisconnectReasonIfAbsent(ctx.channel(), "handler_removed");
         removeChannel(ctx.channel());
     }
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-        log.error("trace={} phase=netty step=exception channelId={}", MDC.get("trace"), ctx.channel().id().asLongText(), cause);
-        removeChannel(ctx.channel());
+        log.error("trace={} phase=netty step=exception channelId={} reason={}" 
+                , MDC.get("trace"), ctx.channel().id().asLongText(), cause.toString(), cause);
+        markDisconnectReason(ctx.channel(), "exception:" + cause.getClass().getSimpleName());
         ctx.close();
+    }
+
+    @Override
+    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+        markDisconnectReasonIfAbsent(ctx.channel(), "channel_inactive");
+        super.channelInactive(ctx);
     }
 
     private void removeChannel(Channel channel) {
         String removedKey = channelRegistry.remove(channel);
+        String reason = clearDisconnectReason(channel);
         if (removedKey != null) {
-            log.info("trace={} phase=netty step=channel_removed onlyCode={} channelId={}",
-                    MDC.get("trace"), removedKey, channel.id().asLongText());
+            log.info("trace={} phase=netty step=channel_removed onlyCode={} channelId={} reason={}",
+                    MDC.get("trace"), removedKey, channel.id().asLongText(), reason);
+            DeviceConnectionTracker.markOffline(removedKey, reason);
         } else {
-            log.info("trace={} phase=netty step=channel_removed_unknown channelId={}",
-                    MDC.get("trace"), channel.id().asLongText());
+            log.info("trace={} phase=netty step=channel_removed_unknown channelId={} reason={}",
+                    MDC.get("trace"), channel.id().asLongText(), reason);
         }
+    }
+
+    private void markDisconnectReason(Channel channel, String reason) {
+        channel.attr(DISCONNECT_REASON).set(reason);
+    }
+
+    private void markDisconnectReasonIfAbsent(Channel channel, String reason) {
+        channel.attr(DISCONNECT_REASON).setIfAbsent(reason);
+    }
+
+    private String clearDisconnectReason(Channel channel) {
+        String reason = channel.attr(DISCONNECT_REASON).getAndSet(null);
+        return reason == null ? "unknown" : reason;
     }
 
     private NetSiteService getNetSiteService() {

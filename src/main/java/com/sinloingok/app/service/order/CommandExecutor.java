@@ -9,6 +9,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
 
+import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
+
 @Slf4j
 @RequiredArgsConstructor
 @Component
@@ -17,6 +20,8 @@ public class CommandExecutor {
     private final DeviceCommandSender deviceSender;       // 硬件下发
     private final SettlementService settlementService;    // 结算
     private final ChannelLockManager channelLockManager;  // 通道锁
+
+    private final ConcurrentHashMap<String, PendingInstruction> pendingInstructions = new ConcurrentHashMap<>();
 
     /** 供 HandlerServer 传入现成 traceId 的入口 */
     public boolean executeWithTrace(String onlyCode, int chNum, DeviceControl.Action commandStr, String traceId) {
@@ -56,19 +61,22 @@ public class CommandExecutor {
                     controlDetail = "channel_locked";
                     shouldExecuteSettlement = false;
                 } else {
-                    boolean ok = sendCommand(controlCommand);
+                    DeviceCommandSender.SendResult sendResult = sendCommand(controlCommand);
+                    boolean ok = sendResult.isSuccess();
                     long costMs = (System.nanoTime() - tCtrl0) / 1_000_000;
                     log.debug("trace={} phase=control step=send target={}:{} cmd={} result={} costMs={}",
                             MDC.get("trace"), controlCommand.getOnlyCode(), controlCommand.getChannel(),
                             controlCommand.getCommand(), ok ? "OK" : "FAIL", costMs);
                     if (ok) {
+                        clearPending(onlyCode, controlCommand);
                         updateLocalState(onlyCode, chNum, controlCommand);
                         controlOutcome = StepOutcome.SUCCESS;
                         controlDetail = formatSuccessDetail(controlCommand, costMs);
                     } else {
                         controlOutcome = StepOutcome.FAILED;
-                        controlDetail = "send_failed";
+                        controlDetail = describeSendFailure(sendResult);
                         shouldExecuteSettlement = false;
+                        rememberPendingIfOffline(onlyCode, chNum, commandStr, controlCommand, sendResult);
                         if (ChannelLockManager.AcquireResult.ACQUIRED.equals(lockResult)) {
                             channelLockManager.release(controlCommand);
                         }
@@ -120,7 +128,7 @@ public class CommandExecutor {
         return overallSuccess;
     }
 
-    private boolean sendCommand(Command command){
+    private DeviceCommandSender.SendResult sendCommand(Command command){
         return deviceSender.send(command.getOnlyCode(), command.getChannel(), command.getCommand());
     }
 
@@ -150,6 +158,49 @@ public class CommandExecutor {
             deviceSender.close(kyOnlyCode, 1);
             airCompressorOff = true;
         }
+    }
+
+    public void replayPending(String onlyCode) {
+        PendingInstruction pending = pendingInstructions.get(onlyCode);
+        if (pending == null) {
+            log.debug("trace={} phase=control step=pending_check onlyCode={} result=none", MDC.get("trace"), onlyCode);
+            return;
+        }
+        log.info("trace={} phase=control step=replay_pending onlyCode={} channel={} action={} reason={}",
+                MDC.get("trace"), pending.onlyCode, pending.channel, pending.action, pending.reason);
+        execute(pending.onlyCode, pending.channel, pending.action);
+    }
+
+    private void rememberPendingIfOffline(String onlyCode, int chNum, DeviceControl.Action commandStr,
+                                          Command controlCommand, DeviceCommandSender.SendResult sendResult) {
+        if (sendResult == null || !sendResult.isOffline() || controlCommand == null) {
+            return;
+        }
+        PendingInstruction pending = new PendingInstruction(onlyCode, chNum, commandStr,
+                controlCommand.getOnlyCode(), controlCommand.getChannel(), sendResult.getDetail());
+        pendingInstructions.put(onlyCode, pending);
+        log.warn("trace={} phase=control step=pending_store onlyCode={} channel={} action={} detail={}",
+                MDC.get("trace"), onlyCode, chNum, commandStr, sendResult.getDetail());
+    }
+
+    private void clearPending(String onlyCode, Command controlCommand) {
+        if (controlCommand == null) {
+            return;
+        }
+        PendingInstruction existing = pendingInstructions.get(onlyCode);
+        if (existing != null && Objects.equals(existing.controlOnlyCode, controlCommand.getOnlyCode())
+                && existing.controlChannel == controlCommand.getChannel()) {
+            pendingInstructions.remove(onlyCode);
+            log.debug("trace={} phase=control step=pending_clear onlyCode={} channel={}",
+                    MDC.get("trace"), onlyCode, controlCommand.getChannel());
+        }
+    }
+
+    private String describeSendFailure(DeviceCommandSender.SendResult sendResult) {
+        if (sendResult == null) {
+            return "send_failed";
+        }
+        return String.format("%s:%s", sendResult.getStatus().name(), sendResult.getDetail());
     }
 
     private void logExecutionPlan(String onlyCode, int chNum, DeviceControl.Action commandStr,
@@ -286,5 +337,24 @@ public class CommandExecutor {
     private String formatSuccessDetail(Command command, long costMs) {
         return String.format("target=%s:%s %s cost=%dms", command.getOnlyCode(), describeChannel(command.getChannel()),
                 safeFuncName(command.getChannel()), costMs);
+    }
+
+    private static final class PendingInstruction {
+        private final String onlyCode;
+        private final int channel;
+        private final DeviceControl.Action action;
+        private final String controlOnlyCode;
+        private final int controlChannel;
+        private final String reason;
+
+        private PendingInstruction(String onlyCode, int channel, DeviceControl.Action action,
+                                   String controlOnlyCode, int controlChannel, String reason) {
+            this.onlyCode = onlyCode;
+            this.channel = channel;
+            this.action = action;
+            this.controlOnlyCode = controlOnlyCode;
+            this.controlChannel = controlChannel;
+            this.reason = reason;
+        }
     }
 }
