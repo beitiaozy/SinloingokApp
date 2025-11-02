@@ -1,6 +1,8 @@
 package com.sinloingok.app.util.ns;
 
 import com.sinloingok.app.service.netsite.NetSiteService;
+import com.sinloingok.app.service.order.CommandExecutor;
+import com.sinloingok.app.util.ns.DeviceConnectionTracker;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +19,7 @@ import java.util.stream.IntStream;
 public class HeartbeatProcessor {
 
     private final NettyChannelRegistry channelRegistry;
+    private final CommandExecutor commandExecutor;
 
     public String process(ChannelHandlerContext ctx, String hexData, Supplier<NetSiteService> netSiteServiceSupplier) {
         if (hexData.length() < 34) {
@@ -29,6 +32,11 @@ public class HeartbeatProcessor {
 
         Channel oldChannel = channelRegistry.register(onlyCode, ctx.channel());
         logChannelUpdate(onlyCode, ctx.channel(), oldChannel);
+
+        DeviceConnectionTracker.markOnline(onlyCode);
+        if (isNewOrReplacedChannel(ctx.channel(), oldChannel)) {
+            commandExecutor.replayPending(onlyCode);
+        }
 
         channelRegistry.sendMsg(onlyCode, hexData);
         handleHeartbeat(onlyCode, netSiteServiceSupplier);
@@ -84,5 +92,12 @@ public class HeartbeatProcessor {
             log.debug("trace={} phase=heartbeat step=refresh onlyCode={} channelId={}",
                     MDC.get("trace"), onlyCode, newChannel.id().asLongText());
         }
+    }
+
+    private boolean isNewOrReplacedChannel(Channel current, Channel oldChannel) {
+        if (oldChannel == null) {
+            return true;
+        }
+        return !oldChannel.id().equals(current.id());
     }
 }
