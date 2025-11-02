@@ -46,6 +46,7 @@ public class Main {
                     "                  down  <onlyCode> <ch>       —— 下降沿上传 (文档OL=1)\n" +
                     "                  start <onlyCode> [times]    —— 随机轮番(1,2,4,7,8)，times省略=无限\n" +
                     "                  linear <onlyCode> [loops]  —— 线性测试 QS2→PM→XC→DM→XS→QS1\n" +
+                    "                  linearDisc <onlyCode>     —— 断连测试（在线→离线→重连）\n" +
                     "                  stop  <onlyCode>            —— 停止当前测试（轮番/线性）\n" +
                     "                  list                        —— 查看连接与轮番状态\n" +
                     "                  quit                        —— 退出");
@@ -148,6 +149,19 @@ public class Main {
                         }
                         int loops = (t.length >= 3) ? Integer.parseInt(t[2]) : 1;
                         c.startLinear(loops);
+                        break;
+                    }
+                    case "lineardisc" : {
+                        if (t.length < 2) {
+                            System.out.println("用法: linearDisc <onlyCode>");
+                            break;
+                        }
+                        DeviceClient c = map.get(t[1]);
+                        if (c == null) {
+                            System.out.println("未知 onlyCode");
+                            break;
+                        }
+                        c.startLinearDisconnectTest();
                         break;
                     }
                     case "stop" : {
