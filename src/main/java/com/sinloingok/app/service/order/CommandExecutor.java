@@ -4,6 +4,7 @@ import com.sinloingok.app.constant.SignalTopology;
 import com.sinloingok.app.models.Command;
 import com.sinloingok.app.models.DeviceControl;
 import com.sinloingok.app.models.NetSiteCache;
+import com.sinloingok.app.voice.OperationVoiceNotifier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
@@ -16,6 +17,7 @@ public class CommandExecutor {
 
     private final DeviceCommandSender deviceSender;       // 硬件下发
     private final SettlementService settlementService;    // 结算
+    private final OperationVoiceNotifier operationVoiceNotifier;
 
     /** 供 HandlerServer 传入现成 traceId 的入口 */
     public boolean executeWithTrace(String onlyCode, int chNum, DeviceControl.Action commandStr, String traceId) {
@@ -87,6 +89,7 @@ public class CommandExecutor {
                 }
                 long costMs = (System.nanoTime() - tSet0) / 1_000_000;
                 log.info("trace={} phase=settle step=done costMs={}", MDC.get("trace"), costMs);
+                notifyVoice(s);
             } catch (Exception e) {
                 log.error("trace={} phase=settle step=exception", MDC.get("trace"), e);
                 return false;
@@ -100,6 +103,17 @@ public class CommandExecutor {
 
     private boolean sendCommand(Command command){
         return deviceSender.send(command.getOnlyCode(), command.getChannel(), command.getCommand());
+    }
+
+    private void notifyVoice(Command command) {
+        if (command == null) {
+            return;
+        }
+        if (command.getChannel() == -1 && DeviceControl.Action.OVER.equals(command.getCommand())) {
+            operationVoiceNotifier.onSettlement(command.getOnlyCode());
+            return;
+        }
+        operationVoiceNotifier.onChannelEvent(command.getOnlyCode(), command.getChannel(), command.getCommand());
     }
 
     public void turnOnPmNetSiteDevice(String onlyCode){
