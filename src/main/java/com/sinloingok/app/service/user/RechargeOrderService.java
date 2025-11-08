@@ -45,13 +45,14 @@ public class RechargeOrderService {
         rechargeOrderDao.insert(order);
     }
 
-    public long createChargeOrder(User user, BluetoothAddressRecharge recharge) {
+    public long createChargeOrder(User user, BluetoothAddressRecharge recharge, String onlyCode) {
         String code = DateUtils.generateUniqueRandomNumber() + user.getId();
         RechargeOrder order = new RechargeOrder();
         order.setCode(code);
         order.setUserId(user.getId());
         order.setRechargeId(recharge.getId());
         order.setType(recharge.getType());
+        order.setOnlyCode(onlyCode);
         order.setAddressId(recharge.getAddressId());
         order.setStatus("未充值");
         order.setCreateTime(DateUtils.curTime());

@@ -17,6 +17,7 @@ public class RechargeOrder {
     private String code;
     private Long userId;
     private Long rechargeId;
+    private String onlyCode;
     private String type;
     private Long addressId;
     private String status;

@@ -1,20 +1,15 @@
 package com.sinloingok.app.util.ns;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
-
 
 import java.util.HashMap;
 import java.util.Map;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class DeviceControlService2 {
-
-    private final NettyChannelRegistry channelRegistry;
     public static String COMMAND_OPEN = "OPEN";
     public static String COMMAND_CLOSE = "CLOSE";
 
@@ -25,7 +20,7 @@ public class DeviceControlService2 {
         String commandKey = command + "-" + channel;
         String msg = COMMAND_MAP.get(commandKey);
         if (StringUtils.isNotEmpty(msg)) {
-            channelRegistry.sendMsg(onlyCode, msg);
+            HandlerServer.sendMsg(onlyCode, msg);
         } else {
             log.info("{}执行的{}命令不存在", onlyCode, command);
         }

@@ -64,8 +64,7 @@ public class WXMiNiProgramService{
 
             if (openId != null) {
                 String accessToken = getAccessToken();
-                User user = userService.findByOpenId(openId, addressId);
-
+                User user = userService.selectByUniqueKey(openId, addressId);
                 if (user == null) {
                     return handleNewUser(encrypted, iv, sessionInfo, openId);
                 } else {
@@ -91,7 +90,7 @@ public class WXMiNiProgramService{
 
         try {
             String accessToken = getAccessToken();
-            User user = userService.findByOpenId(params.get("open_id"), SysConstant.DEFAULT_ADDRESS);
+            User user = userService.selectByUniqueKey(params.get("open_id"), SysConstant.DEFAULT_ADDRESS);
 
             if (user != null) {
                 return handleExistingUser(request, params, user, accessToken);
@@ -148,7 +147,7 @@ public class WXMiNiProgramService{
             String result = WXPayUtil.wxDecrypt(encrypted, sessionInfo.getString("session_key"), iv);
             JSONObject jo = JSONObject.parseObject(result);
             String mobile = jo.getString("phoneNumber");
-            User user = userService.findByOpenId(openId, SysConstant.DEFAULT_ADDRESS);
+            User user = userService.selectByUniqueKey(openId, SysConstant.DEFAULT_ADDRESS);
             if (mobile != null && user != null) {
                 return updateUserMessage(user, openId, getAccessToken());
             }

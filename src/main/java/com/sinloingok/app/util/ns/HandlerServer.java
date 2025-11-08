@@ -1,46 +1,70 @@
 package com.sinloingok.app.util.ns;
 
 import com.sinloingok.app.config.SBeanUtils;
+import com.sinloingok.app.constant.SignalTopology;
+import com.sinloingok.app.dao.status.NetSiteStatus;
+import com.sinloingok.app.models.DeviceControl;
+import com.sinloingok.app.models.NetSiteCache;
 import com.sinloingok.app.service.netsite.NetSiteService;
-import com.sinloingok.app.service.order.ChannelLockManager;
 import com.sinloingok.app.service.order.CommandExecutor;
 import com.sinloingok.app.util.StringValidationUtil;
+import com.sinloingok.app.util.Trace;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelHandler;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.channel.*;
 import io.netty.handler.timeout.IdleState;
 import io.netty.handler.timeout.IdleStateEvent;
-import io.netty.util.AttributeKey;
 import io.netty.util.ReferenceCountUtil;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.IntStream;
 
 @Slf4j
 @Component
 @ChannelHandler.Sharable
-@RequiredArgsConstructor
 public class HandlerServer extends ChannelInboundHandlerAdapter {
 
+    private static final ConcurrentHashMap<String, Channel> CHANNEL_MAP = new ConcurrentHashMap<>();
+
+    private static Map<String, String> BIT_REVERSE_TABLE;
+    static {
+        Map<String, String> bitReverseTable = new LinkedHashMap<>();
+        bitReverseTable.put("00", "00");
+        bitReverseTable.put("01", "80");
+        bitReverseTable.put("02", "40");
+        bitReverseTable.put("04", "20");
+        bitReverseTable.put("08", "10");
+        bitReverseTable.put("10", "08");
+        bitReverseTable.put("20", "04");
+        bitReverseTable.put("40", "02");
+        bitReverseTable.put("80", "01");
+        BIT_REVERSE_TABLE = Collections.unmodifiableMap(bitReverseTable);
+    }
+
+    // 协议标识常量
     private static final String SWITCH_SIGNAL_PREFIX = "eeffc001";
     private static final String HEARTBEAT_PREFIX     = "a50012594a";
     private static final String RELAY_FEEDBACK       = "4f4b21";
 
-    private static final AttributeKey<String> DISCONNECT_REASON = AttributeKey.valueOf("disconnectReason");
-
     private static final byte[] PONG_BYTES = "PONG".getBytes(StandardCharsets.US_ASCII);
 
-    private final NettyChannelRegistry channelRegistry;
-    private final HeartbeatProcessor heartbeatProcessor;
-    private final PulseSignalProcessor pulseSignalProcessor;
-    private final ChannelLockManager channelLockManager;
+    public static int convert(String input) {
+        try {
+            int intValue = Integer.parseInt(input, 16);
+            int result = (int) (Math.log(intValue) / Math.log(2)) + 1;
+            return result < 0 ? 0 : result;
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("输入不是有效数字: " + input);
+        }
+    }
 
     private volatile NetSiteService netSiteService;
     private volatile CommandExecutor executor;
@@ -68,12 +92,9 @@ public class HandlerServer extends ChannelInboundHandlerAdapter {
         try {
             if ((hexData.startsWith(SWITCH_SIGNAL_PREFIX) && hexData.length() >= 18)
                     || StringValidationUtil.isValidFormat(hexData)) {
-                pulseSignalProcessor.process(ctx, hexData, this::getCommandExecutor);
+                processSwitchSignal(ctx, hexData);
             } else if (hexData.startsWith(HEARTBEAT_PREFIX) && hexData.length() >= 10) {
-                String onlyCode = heartbeatProcessor.process(ctx, hexData, this::getNetSiteService);
-                if (onlyCode != null) {
-                    safeWriteAndFlush(ctx, Unpooled.wrappedBuffer(PONG_BYTES));
-                }
+                processHeartbeat(ctx, hexData);
             } else if (RELAY_FEEDBACK.equalsIgnoreCase(hexData)) {
                 processRelayFeedback(ctx, hexData);
             } else {
@@ -85,11 +106,146 @@ public class HandlerServer extends ChannelInboundHandlerAdapter {
         }
     }
 
+    /** 处理开关量信号 */
+    private void processSwitchSignal(ChannelHandlerContext ctx, String hexData) {
+        if (hexData.length() < 16) {
+            log.warn("trace={} phase=ingress step=validate msg=switch_hex_too_short len={} hex={}",
+                    MDC.get("trace"), hexData.length(), hexData);
+            return;
+        }
+
+        String beginSignal;
+        String endSignal;
+        String onlyCode = getOnlyCodeByChannel(ctx.channel());
+
+        if (onlyCode != null && NetSiteCache.pmByOnlyCode(onlyCode) != null) {
+            // PM端：不做位翻转
+            beginSignal = safeSub(hexData, 12, 14);
+            endSignal   = safeSub(hexData, 14, 16);
+        } else {
+            beginSignal = reverseBitsLookup(safeSub(hexData, 12, 14));
+            endSignal   = reverseBitsLookup(safeSub(hexData, 14, 16));
+        }
+
+        if (onlyCode == null) {
+            log.warn("trace={} phase=ingress step=bind msg=onlyCode_not_found hex={} begin={} end={}",
+                    MDC.get("trace"), hexData, beginSignal, endSignal);
+            return;
+        }
+
+        handlePulseSignal(onlyCode, beginSignal, endSignal);
+    }
+
+    public static String reverseBitsLookup(String hexByte) {
+        if (hexByte == null || hexByte.length() != 2) return "00";
+        return BIT_REVERSE_TABLE.getOrDefault(hexByte.toUpperCase(), "00");
+    }
+
+    /** 处理心跳信号 */
+    private void processHeartbeat(ChannelHandlerContext ctx, String hexData) {
+        if (hexData.length() < 34) {
+            log.warn("trace={} phase=heartbeat step=validate msg=heartbeat_hex_too_short len={} hex={}",
+                    MDC.get("trace"), hexData.length(), hexData);
+            return;
+        }
+        String onlyCode = extractOnlyCodeFromHeartbeat(hexData);
+        onlyCode = onlyCodeChange(onlyCode);
+
+        Channel oldChannel = CHANNEL_MAP.put(onlyCode, ctx.channel());
+        logChannelUpdate(onlyCode, ctx.channel(), oldChannel);
+
+        sendMsg(onlyCode, hexData);
+        safeWriteAndFlush(ctx, Unpooled.wrappedBuffer(PONG_BYTES));
+
+        handleHeartbeat(onlyCode, hexData);
+    }
+
+    private String onlyCodeChange(String onlyCode){
+        if("78EE4C6C8DFC".equals(onlyCode)){
+            onlyCode = "0090D500242A";
+        }
+        if("9015060247C4".equals(onlyCode)){
+            onlyCode = "0090D5000F10";
+        }
+        if("90150604FDDC".equals(onlyCode)){
+            onlyCode = "0090D500245B";
+        }
+        return onlyCode;
+    }
+
+    private String extractOnlyCodeFromHeartbeat(String hexData) {
+        String dataPart = hexData.substring(10, 34);
+        return IntStream.range(0, 12)
+                .mapToObj(i -> dataPart.substring(i * 2, i * 2 + 2))
+                .map(this::hexToAscii)
+                .collect(StringBuilder::new, StringBuilder::append, StringBuilder::append)
+                .toString();
+    }
+
     private void processRelayFeedback(ChannelHandlerContext ctx, String hexData) {
-        String onlyCode = channelRegistry.getOnlyCode(ctx.channel());
+        String onlyCode = getOnlyCodeByChannel(ctx.channel());
         log.info("trace={} phase=relay step=feedback onlyCode={} hexData={}", MDC.get("trace"), onlyCode, hexData);
-        if (onlyCode != null) {
-            channelLockManager.onRelayFeedback(onlyCode);
+    }
+
+    /**
+     * 处理脉冲信号：统一生成 traceId、打印首条 FLOW_START、贯穿执行
+     */
+    private void handlePulseSignal(String onlyCode, String beginSignal, String endSignal) {
+        long t0 = System.nanoTime();
+
+        DeviceControl.Action action = "00".equals(beginSignal) ? DeviceControl.Action.CLOSE : DeviceControl.Action.OPEN;
+        int b = safeConvert(beginSignal);
+        int e = safeConvert(endSignal);
+        int channelNo = b + e;
+
+        String funcCode = channelNo > 0 ? SignalTopology.getFunctionCode(channelNo) : "NA";
+        String funcName = channelNo > 0 ? SignalTopology.getFunctionName(channelNo) : "NA";
+
+        String traceId = Trace.newId();
+        Trace.bind(traceId, onlyCode, channelNo, action.name(), funcCode, funcName);
+
+        try {
+            boolean runnable = (NetSiteCache.wscByOnlyCode(onlyCode) != null
+                    && NetSiteStatus.USING.equals(NetSiteCache.wscByOnlyCode(onlyCode).getStatus()))
+                    || (NetSiteCache.pmByOnlyCode(onlyCode) != null);
+
+            // ——【首条头牌日志】——
+            log.info("trace={} phase=FLOW_START funcName={} funcCode={} action={} channel={} onlyCode={} begin={} end={}",
+                    traceId, funcName, funcCode, action.name(), channelNo, onlyCode, beginSignal, endSignal);
+
+            if (!runnable) {
+                log.info("trace={} phase=gateway step=guard msg=site_not_running", traceId);
+                return;
+            }
+
+            log.info("trace={} phase=gateway step=dispatch to=CommandExecutor", traceId);
+            CommandExecutor executor = getCommandExecutor();
+            boolean ok = executor.executeWithTrace(onlyCode, channelNo, action, traceId);
+            long costMs = (System.nanoTime() - t0) / 1_000_000;
+            log.info("trace={} phase=gateway step=done result={} costMs={}", traceId, ok ? "OK" : "FAIL", costMs);
+        } catch (Exception e1) {
+            long costMs = (System.nanoTime() - t0) / 1_000_000;
+            log.error("trace={} phase=gateway step=exception costMs={}", traceId, costMs, e1);
+        } finally {
+            Trace.clear();
+        }
+    }
+
+    private int safeConvert(String hex) {
+        try {
+            return convert(hex);
+        } catch (Exception e) {
+            log.warn("trace={} phase=gateway step=convert_fail hex={}", MDC.get("trace"), hex);
+            return 0;
+        }
+    }
+
+    private void handleHeartbeat(String onlyCode, String hexData) {
+        try {
+            NetSiteService service = getNetSiteService();
+            service.registerOrRefreshNetSite(onlyCode);
+        } catch (Exception e) {
+            log.error("trace={} phase=heartbeat step=handle_exception onlyCode={}", MDC.get("trace"), onlyCode, e);
         }
     }
 
@@ -101,9 +257,7 @@ public class HandlerServer extends ChannelInboundHandlerAdapter {
                 safeWriteAndFlush(ctx, Unpooled.wrappedBuffer(PONG_BYTES));
                 log.debug("trace={} phase=idle step=writer_idle pong_to={}", MDC.get("trace"), ctx.channel().remoteAddress());
             } else if (e.state() == IdleState.READER_IDLE) {
-                log.warn("trace={} phase=idle step=reader_idle close={} reason=heartbeat_timeout",
-                        MDC.get("trace"), ctx.channel().remoteAddress());
-                markDisconnectReason(ctx.channel(), "heartbeat_timeout");
+                log.warn("trace={} phase=idle step=reader_idle close={}", MDC.get("trace"), ctx.channel().remoteAddress());
                 ctx.close();
             }
         } else {
@@ -125,49 +279,98 @@ public class HandlerServer extends ChannelInboundHandlerAdapter {
     @Override
     public void handlerRemoved(ChannelHandlerContext ctx) {
         log.info("trace={} phase=netty step=handler_removed channelId={}", MDC.get("trace"), ctx.channel().id().asLongText());
-        markDisconnectReasonIfAbsent(ctx.channel(), "handler_removed");
         removeChannel(ctx.channel());
     }
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-        log.error("trace={} phase=netty step=exception channelId={} reason={}" 
-                , MDC.get("trace"), ctx.channel().id().asLongText(), cause.toString(), cause);
-        markDisconnectReason(ctx.channel(), "exception:" + cause.getClass().getSimpleName());
+        log.error("trace={} phase=netty step=exception channelId={}", MDC.get("trace"), ctx.channel().id().asLongText(), cause);
+        removeChannel(ctx.channel());
         ctx.close();
     }
 
-    @Override
-    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-        log.error("[DISCONNECT] Channel inactive: {}", ctx.channel().remoteAddress());
-        markDisconnectReasonIfAbsent(ctx.channel(), "channel_inactive");
-        super.channelInactive(ctx);
-    }
-
-    private void removeChannel(Channel channel) {
-        String removedKey = channelRegistry.remove(channel);
-        String reason = clearDisconnectReason(channel);
-        if (removedKey != null) {
-            log.info("trace={} phase=netty step=channel_removed onlyCode={} channelId={} reason={}",
-                    MDC.get("trace"), removedKey, channel.id().asLongText(), reason);
-            DeviceConnectionTracker.markOffline(removedKey, reason);
-        } else {
-            log.info("trace={} phase=netty step=channel_removed_unknown channelId={} reason={}",
-                    MDC.get("trace"), channel.id().asLongText(), reason);
+    public static String sendMsg(String onlyCode, String hexMessage) {
+        Channel channel = CHANNEL_MAP.get(onlyCode);
+        if (channel == null) {
+            log.debug("trace={} phase=io step=send msg=not_found device={} hex={}", MDC.get("trace"), onlyCode, hexMessage);
+            return "not_found";
+        }
+        try {
+            byte[] bytes = hexStringToBytes(hexMessage);
+            final int CHUNK = 1024;
+            int off = 0;
+            while (off < bytes.length) {
+                int len = Math.min(CHUNK, bytes.length - off);
+                ByteBuf buffer = Unpooled.wrappedBuffer(bytes, off, len);
+                channel.write(buffer);
+                off += len;
+            }
+            channel.flush();
+            return "success";
+        } catch (Exception e) {
+            log.error("trace={} phase=io step=send_exception device={}", MDC.get("trace"), onlyCode, e);
+            return "error";
         }
     }
 
-    private void markDisconnectReason(Channel channel, String reason) {
-        channel.attr(DISCONNECT_REASON).set(reason);
+    private void removeChannel(Channel channel) {
+        String removedKey = CHANNEL_MAP.entrySet().stream()
+                .filter(entry -> entry.getValue().equals(channel))
+                .map(Map.Entry::getKey)
+                .findFirst()
+                .orElse(null);
+
+        if (removedKey != null) {
+            log.info("trace={} phase=netty step=channel_removed onlyCode={} channelId={}",
+                    MDC.get("trace"), removedKey, channel.id().asLongText());
+            CHANNEL_MAP.remove(removedKey);
+        } else {
+            log.info("trace={} phase=netty step=channel_removed_unknown channelId={}",
+                    MDC.get("trace"), channel.id().asLongText());
+        }
     }
 
-    private void markDisconnectReasonIfAbsent(Channel channel, String reason) {
-        channel.attr(DISCONNECT_REASON).setIfAbsent(reason);
+    private String getOnlyCodeByChannel(Channel channel) {
+        return CHANNEL_MAP.entrySet().stream()
+                .filter(entry -> entry.getValue().equals(channel))
+                .map(Map.Entry::getKey)
+                .findFirst()
+                .orElse(null);
     }
 
-    private String clearDisconnectReason(Channel channel) {
-        String reason = channel.attr(DISCONNECT_REASON).getAndSet(null);
-        return reason == null ? "unknown" : reason;
+    private void logChannelUpdate(String onlyCode, Channel newChannel, Channel oldChannel) {
+        if (oldChannel == null) {
+            log.info("trace={} phase=heartbeat step=register onlyCode={} channelId={}",
+                    MDC.get("trace"), onlyCode, newChannel.id().asLongText());
+        } else if (!oldChannel.id().equals(newChannel.id())) {
+            log.warn("trace={} phase=heartbeat step=replace onlyCode={} oldChannelId={} newChannelId={}",
+                    MDC.get("trace"), onlyCode, oldChannel.id().asLongText(), newChannel.id().asLongText());
+        } else {
+            log.debug("trace={} phase=heartbeat step=refresh onlyCode={} channelId={}",
+                    MDC.get("trace"), onlyCode, newChannel.id().asLongText());
+        }
+    }
+
+    private static byte[] hexStringToBytes(String hexString) {
+        int length = hexString.length();
+        if ((length & 1) == 1) {
+            throw new IllegalArgumentException("hex 长度必须为偶数: " + length);
+        }
+        byte[] data = new byte[length / 2];
+        for (int i = 0; i < length; i += 2) {
+            int hi = Character.digit(hexString.charAt(i), 16);
+            int lo = Character.digit(hexString.charAt(i + 1), 16);
+            if (hi < 0 || lo < 0) {
+                throw new IllegalArgumentException("非法hex字符: " + hexString.substring(i, i + 2));
+            }
+            data[i / 2] = (byte) ((hi << 4) + lo);
+        }
+        return data;
+    }
+
+    private String hexToAscii(String hex) {
+        int decimal = Integer.parseInt(hex, 16);
+        return String.valueOf((char) decimal);
     }
 
     private NetSiteService getNetSiteService() {
@@ -203,5 +406,13 @@ public class HandlerServer extends ChannelInboundHandlerAdapter {
         } catch (Exception e) {
             log.warn("trace={} phase=io step=write_exception ex={}", MDC.get("trace"), e.toString());
         }
+    }
+
+    private String safeSub(String s, int start, int end) {
+        if (s == null) return "";
+        if (start < 0) start = 0;
+        if (end > s.length()) end = s.length();
+        if (start >= end) return "";
+        return s.substring(start, end);
     }
 }

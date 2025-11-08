@@ -18,7 +18,7 @@ public interface UserDao {
 
     // 查询符合条件的总记录数
     Long countByMobileLike(@Param("mobile") String mobile, @Param("addressId") long addressId);
-    User selectByOpenId(@Param("openId") String openId, @Param("addressId") long addressId);
+    User selectByUniqueKey(@Param("uniqueKey") String uniqueKey, @Param("addressId") long addressId);
 
     int updateMoney(@Param("userId") long userId, @Param("balance") float balance, @Param("extMoney") float extMoney);
 

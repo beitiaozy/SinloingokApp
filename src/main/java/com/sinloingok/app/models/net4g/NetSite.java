@@ -26,6 +26,8 @@ public class NetSite {
     private String updateTime;
     private String heartTime;
 
+    private long paymentAccountId;
+
     /**
      *  PM_NET_SITE, WSC_NET_SITE,KY_NET_SITE  泡沫網絡控制器，洗車機網絡控製器和空壓機網絡控製器
      */

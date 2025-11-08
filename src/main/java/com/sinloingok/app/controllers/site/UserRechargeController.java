@@ -12,7 +12,6 @@ import com.sinloingok.app.dtos.user.RechargeRecordDto;
 import com.sinloingok.app.models.bluetooth.BluetoothAddressRecharge;
 import com.sinloingok.app.models.user.User;
 import com.sinloingok.app.service.netsite.BluetoothAddressRechargeService;
-import com.sinloingok.app.service.netsite.BluetoothAddressService;
 import com.sinloingok.app.service.user.RechargeOrderService;
 import com.sinloingok.app.service.user.UserMoneyRecordService;
 import lombok.extern.slf4j.Slf4j;
@@ -33,8 +32,6 @@ public class UserRechargeController extends BaseController {
     @Autowired
     private RechargeOrderService rechargeOrderService;
     @Autowired
-    private BluetoothAddressService bluetoothAddressService;
-    @Autowired
     private BluetoothAddressRechargeService rechargeService;
     @Autowired
     private UserMoneyRecordService userMoneyRecordService;
@@ -45,11 +42,11 @@ public class UserRechargeController extends BaseController {
     @RequestMapping("getRechargeCode")
     @AuthCheck(LoginType.USER)
     @ResponseBody
-    public StandardRtnDto<?> getRechargeCode(@RequestParam("rechargeId") long rechargeId) {
+    public StandardRtnDto<?> getRechargeCode(@RequestParam("rechargeId") long rechargeId, @RequestParam(name = "dev_id", required=false) String onlyCode) {
         User user = UserContext.getUser();
         // @TODO 下面這部分充值套餐的邏輯有待優化
         BluetoothAddressRecharge bluetoothAddressRecharge = rechargeService.findRechargeById(rechargeId);
-        long orderId = rechargeOrderService.createChargeOrder(user, bluetoothAddressRecharge);
+        long orderId = rechargeOrderService.createChargeOrder(user, bluetoothAddressRecharge, onlyCode);
         return success(orderId);
     }
 

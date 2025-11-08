@@ -2,7 +2,6 @@ package com.sinloingok.app.g4;
 
 import com.google.common.collect.Lists;
 import io.netty.bootstrap.Bootstrap;
-import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
@@ -11,9 +10,6 @@ import io.netty.channel.socket.SocketChannel;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.Locale;
 
 /**
  * 模擬終端設備連接
@@ -24,8 +20,6 @@ public class NettyDeviceClient {
     private final String host;
     private final int port;
     private final String onlyCode;
-
-    private static final long HEARTBEAT_INTERVAL_SECONDS = 30L;
 
     public NettyDeviceClient(String host, int port, String onlyCode) {
         this.host = host;
@@ -43,37 +37,18 @@ public class NettyDeviceClient {
              .handler(new ChannelInitializer<SocketChannel>() {
                  @Override
                  protected void initChannel(SocketChannel ch) {
-                     ch.pipeline().addLast(new SimpleChannelInboundHandler<ByteBuf>() {
-                         private ScheduledFuture<?> heartbeatFuture;
-
+                     ch.pipeline().addLast(new SimpleChannelInboundHandler<Object>() {
                          @Override
                          public void channelActive(ChannelHandlerContext ctx) {
                              log.info("设备 {} 已连接到服务器", onlyCode);
-                             final byte[] heartbeatBytes = hexString2Bytes("a50012594a" + str2Hex(onlyCode));
-                             heartbeatFuture = ctx.executor().scheduleAtFixedRate(() -> {
-                                 if (ctx.channel().isActive()) {
-                                     ctx.writeAndFlush(Unpooled.wrappedBuffer(heartbeatBytes));
-                                 }
-                             }, 0, HEARTBEAT_INTERVAL_SECONDS, TimeUnit.SECONDS);
+                             // 模拟心跳报文，随便拼一个
+                             String heartbeatHex = "a50012594a" + str2Hex(onlyCode);
+                             ctx.writeAndFlush(Unpooled.wrappedBuffer(hexString2Bytes(heartbeatHex)));
                          }
 
                          @Override
-                        protected void channelRead0(ChannelHandlerContext ctx, ByteBuf msg) {
-                            byte[] data = new byte[msg.readableBytes()];
-                            msg.readBytes(data);
-                            String hexPayload = bytesToHex(data);
-                            log.info("设备 {} 收到数据: {}", onlyCode, hexPayload);
-                            if (shouldAck(hexPayload)) {
-                                ctx.writeAndFlush(Unpooled.wrappedBuffer(hexString2Bytes("4f4b21")));
-                            }
-                        }
-
-                         @Override
-                         public void channelInactive(ChannelHandlerContext ctx) {
-                             if (heartbeatFuture != null) {
-                                 heartbeatFuture.cancel(false);
-                             }
-                             log.info("设备 {} 与服务器断开连接", onlyCode);
+                         protected void channelRead0(ChannelHandlerContext ctx, Object msg) {
+                             log.info("设备 {} 收到数据: {}", onlyCode, msg);
                          }
                      });
                  }
@@ -98,22 +73,9 @@ public class NettyDeviceClient {
     private static String str2Hex(String str) {
         StringBuilder sb = new StringBuilder();
         for (char c : str.toCharArray()) {
-            sb.append(String.format("%02X", (int) c));
+            sb.append(Integer.toHexString((int) c));
         }
         return sb.toString();
-    }
-
-    private static String bytesToHex(byte[] bytes) {
-        StringBuilder sb = new StringBuilder();
-        for (byte b : bytes) {
-            sb.append(String.format("%02X", b));
-        }
-        return sb.toString();
-    }
-
-    private static boolean shouldAck(String hexPayload) {
-        String upper = hexPayload.toUpperCase(Locale.ROOT);
-        return !upper.startsWith("A50012594A") && !upper.equals("504F4E47");
     }
 
     public static void main(String[] args) throws Exception {

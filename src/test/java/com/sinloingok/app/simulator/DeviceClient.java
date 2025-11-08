@@ -7,33 +7,22 @@ import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
 
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.BooleanSupplier;
 
 public class DeviceClient {
-    private static final long MIN_CHANNEL_INTERVAL_MILLIS = 3000L;
     private final String host;
     private final int port;
     private final String onlyCode;
 
     private volatile Channel channel;
     private final AtomicBoolean roundRunning = new AtomicBoolean(false);
-    private final AtomicBoolean linearRunning = new AtomicBoolean(false);
-    private final AtomicBoolean disconnectTestRunning = new AtomicBoolean(false);
     private final Random rnd = new Random();
-    private ScheduledFuture<?> roundFuture;
-    private ScheduledFuture<?> linearFuture;
-    private ScheduledFuture<?> heartbeatFuture;
+    private ScheduledFuture<?> currentFuture;
 
     private DeviceClient pmDeviceClient;
-    private final AtomicBoolean running = new AtomicBoolean(true);
-    private final Object reconnectLock = new Object();
-    private volatile boolean reconnectAllowed = true;
 
     public DeviceClient(String host, int port, String onlyCode) {
         this.host = host;
@@ -53,17 +42,9 @@ public class DeviceClient {
                             channel.pipeline().addLast(new DeviceHandler(DeviceClient.this));
                         }
                     });
-
-            while (running.get()) {
-                waitForReconnectPermission();
-                if (!running.get()) {
-                    break;
-                }
-                ChannelFuture f = bs.connect(host, port).sync();
-                this.channel = f.channel();
-                f.channel().closeFuture().sync();
-                this.channel = null;
-            }
+            ChannelFuture f = bs.connect(host, port).sync();
+            this.channel = f.channel();
+            f.channel().closeFuture().sync();
         } finally {
             stopRound();
             channel = null;
@@ -78,69 +59,6 @@ public class DeviceClient {
 
     public boolean isRoundRunning() {
         return roundRunning.get();
-    }
-
-    public boolean isLinearRunning() {
-        return linearRunning.get();
-    }
-
-    /**
-     * 断连测试：保持连接发送一组线性指令 -> 主动断开后再发送一组 -> 恢复连接后立即发送一组。
-     */
-    public void startLinearDisconnectTest() {
-        if (channel == null || !channel.isActive()) {
-            System.out.println(onlyCode + " 未连接");
-            return;
-        }
-        if (roundRunning.get()) {
-            System.out.println(onlyCode + " 正在轮番测试，请先 stop");
-            return;
-        }
-        if (linearRunning.get()) {
-            System.out.println(onlyCode + " 已在执行线性测试，先停止线性测试");
-            return;
-        }
-        if (!disconnectTestRunning.compareAndSet(false, true)) {
-            System.out.println(onlyCode + " 断连测试正在执行");
-            return;
-        }
-
-        new Thread(() -> {
-            try {
-                playLinearSequence("ONLINE", 2, true);
-
-                pauseReconnect();
-                Channel ch = channel;
-                if (ch != null && ch.isActive()) {
-                    ch.close().syncUninterruptibly();
-                }
-                waitUntil(() -> {
-                    Channel current = channel();
-                    return current == null || !current.isActive();
-                }, 5000L);
-
-                playLinearSequence("OFFLINE", 1, false);
-
-                resumeReconnect();
-                boolean reconnected = waitUntil(() -> {
-                    Channel current = channel();
-                    return current != null && current.isActive();
-                }, 10000L);
-                if (!reconnected) {
-                    System.out.println(onlyCode + " 断连测试: 重连超时，未继续执行");
-                    return;
-                }
-
-                playLinearSequence("RECONNECTED", 2, true);
-                System.out.println(onlyCode + " 断连测试完成");
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                System.out.println(onlyCode + " 断连测试被中断: " + e.getMessage());
-            } finally {
-                resumeReconnect();
-                disconnectTestRunning.set(false);
-            }
-        }, onlyCode + "-disc-test").start();
     }
 
     // 兼容服务端 substring(12,14),(14,16) 的开/关帧
@@ -174,57 +92,28 @@ public class DeviceClient {
             System.out.println(onlyCode + " 已在轮番中");
             return;
         }
-        if (linearRunning.get()) {
-            System.out.println(onlyCode + " 已在执行线性测试，先停止线性测试");
-            return;
-        }
         roundRunning.set(true);
         runRandom(times);
     }
 
     public void stopRound() {
         roundRunning.set(false);
-        stopLinearTest();
-        if (roundFuture != null) roundFuture.cancel(false);
-        roundFuture = null;
+        if (currentFuture != null) currentFuture.cancel(false);
+        currentFuture = null;
         if (channel != null && channel.isActive()) {
             // 安全：全关（1..8），避免残留上一次状态
             for (int ch = 1; ch <= 8; ch++) {
                 sendCloseCompat(ch);
-                try {
-                    Thread.sleep(30);
-                } catch (InterruptedException ignored) {
-                }
+                try { Thread.sleep(30); } catch (InterruptedException ignored) {}
             }
         }
-    }
-
-    public void startLinear(int loops) {
-        if (channel == null || !channel.isActive()) {
-            System.out.println(onlyCode + " 未连接");
-            return;
-        }
-        if (linearRunning.get()) {
-            System.out.println(onlyCode + " 线性测试已在执行");
-            return;
-        }
-        if (roundRunning.get()) {
-            System.out.println(onlyCode + " 正在轮番测试，请先 stop");
-            return;
-        }
-        if (loops < 0) {
-            loops = 0;
-        }
-        linearRunning.set(true);
-        runLinear(loops);
     }
 
     // ========== internal ==========
     void onActive(ChannelHandlerContext ctx) {
         // 上线立即心跳一次 + 每秒心跳
-        System.out.println(onlyCode + " 已连接 " + ctx.channel().remoteAddress());
         sendHeartbeat(ctx, "HB(ONLINE)");
-        heartbeatFuture = ctx.channel().eventLoop().scheduleAtFixedRate(
+        ctx.channel().eventLoop().scheduleAtFixedRate(
                 () -> sendHeartbeat(ctx, "HB(periodic)"),
                 1000, 1000, TimeUnit.MILLISECONDS
         );
@@ -233,21 +122,6 @@ public class DeviceClient {
     void onMessage(byte[] bytes) {
         // 可按需打印
         // System.out.println(onlyCode + " <<< RESP HEX=" + Hex.toHex(bytes));
-    }
-
-    void onInactive() {
-        System.out.println(onlyCode + " 连接已断开");
-        cancelHeartbeat();
-        linearRunning.set(false);
-        if (linearFuture != null) {
-            linearFuture.cancel(false);
-            linearFuture = null;
-        }
-        roundRunning.set(false);
-        if (roundFuture != null) {
-            roundFuture.cancel(false);
-            roundFuture = null;
-        }
     }
 
     // ========== 随机轮番（新版，已按 8↔1 对调语义） ==========
@@ -277,10 +151,7 @@ public class DeviceClient {
                 // 2) 逐个触发（用 sendOpenCompat 表示“动作”，不区分语义）
                 for (int ch : picks) {
                     sendOpenCompat(ch);
-                    try {
-                        Thread.sleep(50 + rnd.nextInt(151));
-                    } catch (InterruptedException ignored) {
-                    }
+                    try { Thread.sleep(50 + rnd.nextInt(151)); } catch (InterruptedException ignored) {}
                 }
 
                 // 3) 穿插 PM 设备（0~2 次），短促触发 PMKZSB 相应通道
@@ -289,10 +160,7 @@ public class DeviceClient {
                     for (int i = 0; i < pmTimes; i++) {
                         int pmCh = SignalTopology.tempWscNetSitePmChNum(onlyCode); // PMKZSB.ch(siteNo)
                         pmDeviceClient.sendOpenCompat(pmCh);
-                        try {
-                            Thread.sleep(200 + rnd.nextInt(601));
-                        } catch (InterruptedException ignored) {
-                        }
+                        try { Thread.sleep(200 + rnd.nextInt(601)); } catch (InterruptedException ignored) {}
                     }
                 }
 
@@ -304,181 +172,27 @@ public class DeviceClient {
 
                 // 5) 下一轮：3~10s 后继续
                 int nextGap = 3 + rnd.nextInt(8);
-                roundFuture = loop.schedule(this, nextGap, TimeUnit.SECONDS);
+                loop.schedule(this, nextGap, TimeUnit.SECONDS);
             }
         };
 
         // 立即启动第一轮
-        roundFuture = loop.schedule(task, 0, TimeUnit.SECONDS);
+        currentFuture = loop.schedule(task, 0, TimeUnit.SECONDS);
     }
 
-    private void runLinear(int loops) {
-        final int[] sequence = {8, 8, 3, 3, 8, 3, 3, 8, 2, 4, 5, 7, 8, 2, 4, 5, 7, 8};
-        final EventLoop loop = channel.eventLoop();
-
-        Runnable task = new Runnable() {
-            int index = 0;
-            int remain = loops;
-
-            @Override
-            public void run() {
-                if (!linearRunning.get() || channel == null || !channel.isActive()) {
-                    stopLinearTest();
-                    return;
-                }
-
-                int chNum = sequence[index];
-                int holdSeconds = 5 + rnd.nextInt(11); // 5~15 秒
-                long holdMillis = holdSeconds * 1000L;
-                String funcCode = SignalTopology.getFunctionCode(chNum);
-                String funcName = SignalTopology.getFunctionName(chNum);
-                System.out.println(onlyCode + " >>> LINEAR ch=" + chNum +
-                        " function=" + funcCode + (funcName != null ? "(" + funcName + ")" : "") +
-                        " duration=" + holdSeconds + "s");
-                sendOpenCompat(chNum);
-
-                long closeDelay = Math.max(1000L, holdMillis - 500L);
-                loop.schedule(() -> sendCloseCompat(chNum), closeDelay, TimeUnit.MILLISECONDS);
-
-                index++;
-                if (index >= sequence.length) {
-                    index = 0;
-                    if (remain > 0) {
-                        remain--;
-                        if (remain == 0) {
-                            System.out.println(onlyCode + " 线性测试完成");
-                            stopLinearTest();
-                            return;
-                        }
-                    }
-                }
-
-                long nextDelay = holdMillis + 500L;
-                linearFuture = loop.schedule(this, nextDelay, TimeUnit.MILLISECONDS);
-            }
-        };
-
-        linearFuture = loop.schedule(task, 0, TimeUnit.SECONDS);
-    }
-
-    private void stopLinearTest() {
-        linearRunning.set(false);
-        if (linearFuture != null) {
-            linearFuture.cancel(false);
-            linearFuture = null;
-        }
-    }
-
-    /** 按线性测试节奏执行断连测试阶段。 */
-    private void playLinearSequence(String stage, int loops, boolean allowClose) throws InterruptedException {
-        final int[] sequence = {8, 8, 3, 3, 8, 3, 3, 8, 2, 4, 5, 7, 8, 2, 4, 5, 7, 8};
-        if (loops <= 0) {
-            loops = 1;
-        }
-
-        Map<Integer, Long> lastOpenAt = new HashMap<>();
-
-        for (int loopIndex = 1; loopIndex <= loops; loopIndex++) {
-            for (int chNum : sequence) {
-                enforceMinChannelInterval(lastOpenAt, chNum);
-
-                int holdSeconds = 5 + rnd.nextInt(11); // 5~15 秒
-                long holdMillis = holdSeconds * 1000L;
-                String funcCode = SignalTopology.getFunctionCode(chNum);
-                String funcName = SignalTopology.getFunctionName(chNum);
-                System.out.println(onlyCode + " >>> DISCONNECT_TEST stage=" + stage
-                        + " loop=" + loopIndex + "/" + loops
-                        + " ch=" + chNum
-                        + " function=" + funcCode
-                        + (funcName != null ? "(" + funcName + ")" : "")
-                        + " duration=" + holdSeconds + "s"
-                        + (allowClose ? "" : " (OPEN only)"));
-
-                sendOpenCompat(chNum);
-                lastOpenAt.put(chNum, System.currentTimeMillis());
-
-                if (allowClose) {
-                    long closeDelay = Math.max(1000L, holdMillis - 500L);
-                    Thread.sleep(closeDelay);
-                    if (channel != null && channel.isActive()) {
-                        sendCloseCompat(chNum);
-                    } else {
-                        System.out.println(onlyCode + " >>> DISCONNECT_TEST stage=" + stage
-                                + " ch=" + chNum + " close skipped (channel inactive)");
-                    }
-                    long remainder = Math.max(0L, (holdMillis + 500L) - closeDelay);
-                    Thread.sleep(remainder);
-                } else {
-                    Thread.sleep(holdMillis + 500L);
-                }
-            }
-        }
-    }
-
-    private void enforceMinChannelInterval(Map<Integer, Long> lastOpenAt, int chNum) throws InterruptedException {
-        Long lastTime = lastOpenAt.get(chNum);
-        if (lastTime == null) {
-            return;
-        }
-        long elapsed = System.currentTimeMillis() - lastTime;
-        if (elapsed < MIN_CHANNEL_INTERVAL_MILLIS) {
-            Thread.sleep(MIN_CHANNEL_INTERVAL_MILLIS - elapsed);
-        }
-    }
-
-    private boolean waitUntil(BooleanSupplier condition, long timeoutMillis) throws InterruptedException {
-        long deadline = System.currentTimeMillis() + timeoutMillis;
-        while (System.currentTimeMillis() < deadline) {
-            if (condition.getAsBoolean()) {
-                return true;
-            }
-            Thread.sleep(100);
-        }
-        return condition.getAsBoolean();
-    }
-
-    private void waitForReconnectPermission() throws InterruptedException {
-        synchronized (reconnectLock) {
-            while (running.get() && !reconnectAllowed) {
-                reconnectLock.wait();
-            }
-        }
-    }
-
-    private void pauseReconnect() {
-        synchronized (reconnectLock) {
-            reconnectAllowed = false;
-        }
-    }
-
-    private void resumeReconnect() {
-        synchronized (reconnectLock) {
-            if (!reconnectAllowed) {
-                reconnectAllowed = true;
-                reconnectLock.notifyAll();
-            }
-        }
-    }
-
-    /**
-     * 从池中随机挑选 count 个元素并随机打乱顺序
-     */
+    /** 从池中随机挑选 count 个元素并随机打乱顺序 */
     private int[] randomPickAndShuffle(int[] pool, int count) {
         int[] copy = pool.clone();
         for (int i = copy.length - 1; i > 0; i--) {
             int j = rnd.nextInt(i + 1);
-            int t = copy[i];
-            copy[i] = copy[j];
-            copy[j] = t;
+            int t = copy[i]; copy[i] = copy[j]; copy[j] = t;
         }
         if (count >= copy.length) return copy;
         int[] out = new int[count];
         System.arraycopy(copy, 0, out, 0, count);
         for (int i = out.length - 1; i > 0; i--) {
             int j = rnd.nextInt(i + 1);
-            int t = out[i];
-            out[i] = out[j];
-            out[j] = t;
+            int t = out[i]; out[i] = out[j]; out[j] = t;
         }
         return out;
     }
@@ -501,12 +215,5 @@ public class DeviceClient {
 
     public void setPmDeviceClient(DeviceClient pmDeviceClient) {
         this.pmDeviceClient = pmDeviceClient;
-    }
-
-    private void cancelHeartbeat() {
-        if (heartbeatFuture != null) {
-            heartbeatFuture.cancel(false);
-            heartbeatFuture = null;
-        }
     }
 }

@@ -88,10 +88,10 @@
         </if>
     </select>
 
-    <select id="selectByOpenId" resultMap="UserResultMap">
+    <select id="selectByUniqueKey" resultMap="UserResultMap">
         SELECT <include refid="Base_Column_List"/>
         FROM user u left join user_address_account ada on u.id = ada.user_id
-        WHERE u.open_id = #{openId} AND ada.address_id = #{addressId}
+        WHERE (u.open_id = #{uniqueKey} or u.mobile = #{uniqueKey}) AND ada.address_id = #{addressId}
         LIMIT 1
     </select>
 

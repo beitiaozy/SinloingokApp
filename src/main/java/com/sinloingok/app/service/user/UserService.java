@@ -31,8 +31,8 @@ public class UserService {
         return new SimplePageDto<>(offset, pageSize, count, list);
     }
 
-    public User findByOpenId(String openId, long addressId) {
-        return userDao.selectByOpenId(openId, addressId);
+    public User selectByUniqueKey(String openId, long addressId) {
+        return userDao.selectByUniqueKey(openId, addressId);
     }
 
     public int updateMoney(Long id, float balance, float extMoney) {

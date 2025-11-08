@@ -14,11 +14,6 @@ class DeviceHandler extends SimpleChannelInboundHandler<ByteBuf> {
     }
 
     @Override
-    public void channelInactive(ChannelHandlerContext ctx) {
-        owner.onInactive();
-    }
-
-    @Override
     protected void channelRead0(ChannelHandlerContext ctx, ByteBuf msg) {
         byte[] arr = new byte[msg.readableBytes()];
         msg.readBytes(arr);

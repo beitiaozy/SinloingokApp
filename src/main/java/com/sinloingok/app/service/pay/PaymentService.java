@@ -224,7 +224,7 @@ public class PaymentService {
      */
     private NetSite getNSite() {
         List<NetSite> list = getNetSites();
-    	NetSite ns = list.get(0);
+    	NetSite ns = list.get(1);
     	ns.mapFromRecord(ns);
     	return ns;
     } 

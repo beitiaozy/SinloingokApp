@@ -1,13 +1,5 @@
-#spring:
-#  datasource:
-#    url: jdbc:mysql://localhost:3306/sinloingok-hm?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
-#    username: root
-#    password: admin
-#    driver-class-name: com.mysql.cj.jdbc.Driver
-#  jackson:
-#    property-naming-strategy: SNAKE_CASE
 spring:
-# 内存泄漏防护 (对应 JreMemoryLeakPreventionListener)
+  # 内存泄漏防护 (对应 JreMemoryLeakPreventionListener)
   jmx:
     enabled: true # 对应 GlobalResourcesLifecycleListener
   application:
@@ -69,11 +61,11 @@ netty:
     so-backlog: 512 # 等待连接队列大小
     so-keepalive: true # 是否启用TCP KeepAlive
     idle:
-      read-seconds: 30
-      write-seconds: 10
+      read-seconds: 100
+      write-seconds: 30
     timeout:
-      read-seconds: 20
-      write-seconds: 10
+      read-seconds: 180
+      write-seconds: 60
     enable-traffic-shaping: false
     traffic:
       write-bytes-per-sec: 16777216
@@ -89,6 +81,7 @@ logging:
     org.springframework.web: INFO          # Spring MVC日志
     org.hibernate.SQL: INFO               # Hibernate SQL日志
     com.sinloingok.app: INFO               # 项目包日志
+    org.springframework.scheduling: INFO
   file:
     name: logs/app.log                     # 输出到文件
   pattern:

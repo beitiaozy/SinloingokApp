@@ -29,6 +29,11 @@ public class NetSiteInfoDto {
     private Float prizeSl;
     private String rechargeDescription;
 
+    /**
+     * 店面是否營業
+     */
+    private boolean addressStatus;
+
     private Float money;   // 平台显示合计金额
     private Float extMoney; // 赠送金额
 

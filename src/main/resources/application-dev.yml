@@ -20,7 +20,7 @@ mybatis:
 
 sinloingok:
   wechat:
-    notifyUrlRecharge: "http://t9337e6d.natappfree.cc/payment/sbpaycallForRecharge"
+    notifyUrlRecharge: "http://z4dd989e.natappfree.cc/payment/sbpaycallForRecharge"
 
 # Netty服务器自定义配置
 netty:
@@ -32,11 +32,11 @@ netty:
     so-backlog: 512 # 等待连接队列大小
     so-keepalive: true # 是否启用TCP KeepAlive
     idle:
-      read-seconds: 100
-      write-seconds: 30
+      read-seconds: 30
+      write-seconds: 10
     timeout:
-      read-seconds: 180
-      write-seconds: 60
+      read-seconds: 20
+      write-seconds: 10
     enable-traffic-shaping: false
     traffic:
       write-bytes-per-sec: 16777216
