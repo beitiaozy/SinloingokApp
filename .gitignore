@@ -1,0 +1,41 @@
+# Java
+target/
+*.class
+*.log
+
+# Node
+node_modules/
+dist/
+
+# IDE
+.idea/
+.vscode/
+
+# 环境变量
+.env
+*.key
+*.pem
+
+# Additional from original main
+# Compiled class file
+# (above rules already include *.class)
+# Log file
+# (above rules already include *.log)
+# BlueJ files
+*.ctxt
+
+# Mobile Tools for Java (J2ME)
+.mtj.tmp/
+
+# Package Files #
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# Virtual machine crash logs
+hs_err_pid*
+replay_pid*

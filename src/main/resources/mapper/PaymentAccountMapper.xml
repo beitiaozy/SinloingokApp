@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- resources/mappers/PaymentAccountMapper.xml -->
+<mapper namespace="com.sinloingok.app.dao.PaymentAccountMapper">
+    <resultMap id="BaseMap" type="com.sinloingok.app.models.payment.PaymentAccount">
+        <id column="id" property="id"/>
+        <result column="channel" property="channel"/>
+        <result column="name" property="name"/>
+        <result column="vendor_sn" property="vendorSn"/>
+        <result column="vendor_key" property="vendorKey"/>
+        <result column="app_id" property="appId"/>
+        <result column="api_url" property="apiUrl"/>
+        <result column="notify_url_recharge" property="notifyUrlRecharge"/>
+        <result column="wechat_sub_appid" property="wechatSubAppId"/>
+        <result column="platform_public_key" property="platformPublicKey"/>
+        <result column="is_enabled" property="isEnabled"/>
+        <result column="gmt_create" property="gmtCreate"/>
+        <result column="gmt_modified" property="gmtModified"/>
+    </resultMap>
+
+    <select id="selectById" resultMap="BaseMap">
+        SELECT * FROM payment_account WHERE id = #{id}
+    </select>
+
+    <select id="listEnabled" resultMap="BaseMap">
+        SELECT * FROM payment_account WHERE is_enabled = 1
+    </select>
+
+    <insert id="insert" parameterType="com.sinloingok.app.models.payment.PaymentAccount" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO payment_account
+        (channel,name,vendor_sn,vendor_key,app_id,api_url,notify_url_recharge,wechat_sub_appid,platform_public_key,is_enabled)
+        VALUES
+        (#{channel},#{name},#{vendorSn},#{vendorKey},#{appId},#{apiUrl},#{notifyUrlRecharge},#{wechatSubAppId},#{platformPublicKey},#{isEnabled})
+    </insert>
+
+    <update id="updateById" parameterType="com.sinloingok.app.models.payment.PaymentAccount">
+        UPDATE payment_account
+        SET channel=#{channel}, name=#{name}, vendor_sn=#{vendorSn}, vendor_key=#{vendorKey},
+        app_id=#{appId}, api_url=#{apiUrl}, notify_url_recharge=#{notifyUrlRecharge},
+        wechat_sub_appid=#{wechatSubAppId}, platform_public_key=#{platformPublicKey},
+        is_enabled=#{isEnabled}
+        WHERE id=#{id}
+    </update>
+</mapper>
