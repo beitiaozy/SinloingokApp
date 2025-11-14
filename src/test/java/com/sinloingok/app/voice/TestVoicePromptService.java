@@ -38,6 +38,7 @@ import static org.junit.Assert.*;
 public class TestVoicePromptService extends TestSinloingokApplication {
 
     private static final SmyooApiFixture API = new SmyooApiFixture();
+    private static final long SPEAKER_SEQUENCE_INTERVAL_MS = 2000L;
 
     @Autowired
     private VoicePromptService voicePromptService;
@@ -251,6 +252,16 @@ public class TestVoicePromptService extends TestSinloingokApplication {
     }
 
     @Test
+    public void test31SpeakerPlayTextSequence() throws IOException, InterruptedException {
+        Assume.assumeTrue("缺少喇叭設備，跳過測試", API.getSpeakerMcuid() != null);
+        API.playSpeakerSequence(new String[]{
+                "歡迎光臨洗淶樂自助洗車",
+                "清水已啟動",
+                "清水已暫停"
+        });
+    }
+
+    @Test
     public void test32SetCountdownAlarm() throws IOException {
         Assume.assumeTrue("缺少 mcuid，跳過測試", API.getSampleMcuid() != null);
         ApiResponse<Map<String, Object>> response = API.setCountdownAlarm(API.getSampleMcuid());
@@ -282,6 +293,7 @@ public class TestVoicePromptService extends TestSinloingokApplication {
         private static final String DEVICE_ID = "82CA48CC5D2A4959BE1CFFE99974D924";
         private static final String PHONE = "18382051045";
         private static final String PASSWORD = "Dxpbl1904";
+        private static final long SEQUENCE_INTERVAL = TestVoicePromptService.SPEAKER_SEQUENCE_INTERVAL_MS;
 
         private SmyooClient client;
         private CommonParams templateCommon;
@@ -331,30 +343,21 @@ public class TestVoicePromptService extends TestSinloingokApplication {
         ApiResponse<Map<String, Object>> setDeviceData(String mcuid) throws IOException {
             DatapointRequest request = datapointRequest(mcuid);
             request.setDatatype(1);
-            request.setDatapoint(DatapointBuilder.create()
-                    .put("index", 1)
-                    .put("status", 1)
-                    .json());
+            request.setDatapoint(channelStatusPayload());
             return client.setDeviceData(request);
         }
 
         ApiResponse<Map<String, Object>> setChannelData(String mcuid) throws IOException {
             DatapointRequest request = datapointRequest(mcuid);
             request.setDatatype(1);
-            request.setDatapoint(DatapointBuilder.create()
-                    .put("index", 1)
-                    .put("status", 1)
-                    .json());
+            request.setDatapoint(channelStatusPayload());
             return client.setChannelData(request);
         }
 
         ApiResponse<Map<String, Object>> setChannelDataAuto(String mcuid) throws IOException {
             DatapointRequest request = datapointRequest(mcuid);
             request.setDatatype(1);
-            request.setDatapoint(DatapointBuilder.create()
-                    .put("index", 1)
-                    .put("status", 1)
-                    .json());
+            request.setDatapoint(channelStatusPayload());
             return client.setChannelDataAuto(request);
         }
 
@@ -498,6 +501,17 @@ public class TestVoicePromptService extends TestSinloingokApplication {
             return client.speakerPlayOnline(request);
         }
 
+        void playSpeakerSequence(String[] texts) throws IOException, InterruptedException {
+            for (String text : texts) {
+                ApiResponse<Map<String, Object>> response = speakerPlayText(text);
+                TestVoicePromptService.logResponse("speakerPlayTextSequence", response);
+                if (response == null) {
+                    throw new AssumptionViolatedException("喇叭文本播放返回空響應");
+                }
+                Thread.sleep(SEQUENCE_INTERVAL);
+            }
+        }
+
         ApiResponse<Map<String, Object>> setCountdownAlarm(String mcuid) throws IOException {
             DatapointRequest request = datapointRequest(mcuid);
             request.setDatatype(1);
@@ -615,6 +629,13 @@ public class TestVoicePromptService extends TestSinloingokApplication {
             DatapointRequest request = new DatapointRequest(copyCommon());
             request.setMcuid(mcuid);
             return request;
+        }
+
+        private String channelStatusPayload() {
+            return DatapointBuilder.create()
+                    .put("index", 1)
+                    .put("status", 1)
+                    .json();
         }
 
         private List<Map<String, Object>> singleChannelPayload() {
