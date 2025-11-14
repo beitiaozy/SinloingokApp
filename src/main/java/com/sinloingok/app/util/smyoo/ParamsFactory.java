@@ -3,6 +3,9 @@ package com.sinloingok.app.util.smyoo;
 import com.sinloingok.app.constant.CommonParams;
 import java.util.UUID;
 
+/**
+ * 工具類：提供便捷的公共參數構建方法，保持與測試示例一致。
+ */
 public final class ParamsFactory {
     private ParamsFactory(){}
 
