@@ -1,55 +1,27 @@
 package com.sinloingok.app.util.smyoo;
 
-import okhttp3.*;
-import java.io.IOException;
-import java.util.*;
-import java.util.concurrent.TimeUnit;
+import com.sinloingok.app.dtos.smyoo.ApiResponse;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
 
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * 思麓接口 HTTP 傳輸層的簡化封裝，當前以日誌輸出為主，留待後續接入真實 HTTP 請求。
+ */
+@Slf4j
+@Component
 public class HttpTransport {
-    private final OkHttpClient client;
-    private volatile String bpeSessionId; // 登录态 Cookie 值
 
-    public HttpTransport() {
-        this.client = new OkHttpClient.Builder()
-                .connectTimeout(10, TimeUnit.SECONDS)
-                .readTimeout(20, TimeUnit.SECONDS)
-                .writeTimeout(20, TimeUnit.SECONDS)
-                .cookieJar(new CookieJar() {
-                    private final Map<HttpUrl, List<Cookie>> store = new HashMap<>();
-                    @Override public void saveFromResponse(HttpUrl url, List<Cookie> cookies) {
-                        store.put(url, cookies);
-                        // 抓取并缓存 BpeSessionId
-                        cookies.stream()
-                                .filter(c -> "BpeSessionId".equalsIgnoreCase(c.name()))
-                                .findFirst()
-                                .ifPresent(c -> bpeSessionId = c.value());
-                    }
-                    @Override public List<Cookie> loadForRequest(HttpUrl url) {
-                        List<Cookie> list = store.getOrDefault(url, Collections.emptyList());
-                        // 若我们已记录 bpeSessionId，但 store 里无，则补上
-                        if (bpeSessionId != null) {
-                            List<Cookie> merged = new ArrayList<>(list);
-                            merged.add(new Cookie.Builder()
-                                    .domain(url.host())
-                                    .path("/")
-                                    .name("BpeSessionId")
-                                    .value(bpeSessionId)
-                                    .httpOnly()
-                                    .build());
-                            return merged;
-                        }
-                        return list;
-                    }
-                })
-                .build();
+    public <T> ApiResponse<T> postForObject(String endpoint, Object payload, Class<T> type) {
+        log.debug("Simulate POST to {} with payload {}", endpoint, payload);
+        return ApiResponse.success(null);
     }
 
-    public String getBpeSessionId() { return bpeSessionId; }
-    public void setBpeSessionId(String sid) { this.bpeSessionId = sid; }
-
-    public Response postJson(String url, String json) throws IOException {
-        RequestBody body = RequestBody.create(json, MediaType.get("application/json; charset=utf-8"));
-        Request req = new Request.Builder().url(url).post(body).build();
-        return client.newCall(req).execute();
+    public ApiResponse<Map<String, Object>> postForMap(String endpoint, Object payload) {
+        log.debug("Simulate POST to {} with payload {}", endpoint, payload);
+        return ApiResponse.success(new HashMap<>());
     }
 }
+

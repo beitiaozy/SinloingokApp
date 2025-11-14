@@ -49,6 +49,8 @@ public class CommandExecutor {
                         MDC.get("trace"), c.getOnlyCode(), c.getChannel(), c.getCommand(), ok ? "OK" : "FAIL", costMs);
                 if (!ok) return false;
 
+                notifyVoice(c);
+
                 // ★ 仅在控制成功后更新状态（本机或 PMKZSB 目标）
                 DeviceControl dc = NetSiteCache.wscDeviceControl(onlyCode);
                 if (dc != null && c.getOnlyCode().equals(onlyCode)) {

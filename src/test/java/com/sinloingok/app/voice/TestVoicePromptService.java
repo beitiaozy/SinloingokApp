@@ -12,7 +12,7 @@ import com.sinloingok.app.dtos.smyoo.req.McuNameQueryRequest;
 import com.sinloingok.app.dtos.smyoo.req.ParentIdRequest;
 import com.sinloingok.app.dtos.smyoo.req.RequestBase;
 import com.sinloingok.app.dtos.smyoo.req.TicketVerifyRequest;
-import com.sinloingok.app.service.VoicePromptService;
+import com.sinloingok.app.voice.VoicePromptService;
 import com.sinloingok.app.util.smyoo.DatapointBuilder;
 import com.sinloingok.app.util.smyoo.HttpTransport;
 import com.sinloingok.app.util.smyoo.ParamsFactory;
